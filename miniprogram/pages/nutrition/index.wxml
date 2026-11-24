@@ -1,0 +1,246 @@
+<view class="page-wrap">
+  <!-- 顶部分段切换 -->
+  <view class="tab-switch">
+    <view
+      class="tab-btn {{activeTab === 'ingredients' ? 'tab-btn-active' : ''}}"
+      data-tab="ingredients"
+      bindtap="onSwitchTab"
+    >
+      食材营养库 ({{totalIngredients}})
+    </view>
+    <view
+      class="tab-btn {{activeTab === 'supplements' ? 'tab-btn-active' : ''}}"
+      data-tab="supplements"
+      bindtap="onSwitchTab"
+    >
+      营养剂库 ({{totalSupplements}})
+    </view>
+  </view>
+
+  <!-- 搜索栏 -->
+  <view class="search-box">
+    <text class="search-icon">🔍</text>
+    <input
+      class="search-input"
+      placeholder="{{activeTab === 'ingredients' ? '搜索 176 项食材、部位或来源...' : '搜索 10 款常用补剂或品牌...'}}"
+      value="{{keyword}}"
+      bindinput="onSearchInput"
+      confirm-type="search"
+    />
+    <text wx:if="{{keyword}}" class="search-clear" bindtap="onClearSearch">✕</text>
+  </view>
+
+  <!-- 食材库视图 -->
+  <block wx:if="{{activeTab === 'ingredients'}}">
+    <scroll-view class="filter-scroll" scroll-x="true" enable-flex="true">
+      <view class="filter-row">
+        <view
+          wx:for="{{roleTabs}}"
+          wx:key="id"
+          class="filter-pill {{activeRole === item.id ? 'filter-pill-active' : ''}}"
+          data-role="{{item.id}}"
+          bindtap="onSelectRole"
+        >
+          <text>{{item.icon}}</text>
+          <text>{{item.name}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view class="summary-strip">
+      <text class="muted-sm">每 100g 生鲜可食部 · 统一单位基准 · 匹配 {{matchedIngredientCount}} 项</text>
+    </view>
+
+    <block wx:if="{{groupedIngredients.length > 0}}">
+      <view wx:for="{{groupedIngredients}}" wx:key="category" class="group-block">
+        <view class="group-header">
+          <text class="group-title">{{item.category}}</text>
+          <text class="group-count">{{item.items.length}} 项</text>
+        </view>
+
+        <view
+          wx:for="{{item.items}}"
+          wx:for-item="ing"
+          wx:key="id"
+          class="ing-card"
+          data-id="{{ing.id}}"
+          bindtap="onOpenIngredient"
+        >
+          <view class="ing-top">
+            <view class="ing-icon-box">{{ing.roleIcon}}</view>
+            <view class="ing-main">
+              <view class="ing-name-row">
+                <text class="ing-name">{{ing.name}}</text>
+                <text class="badge {{ing.badgeClass}}">{{ing.badgeLabel}}</text>
+              </view>
+              <view class="ing-metrics">
+                <text class="metric-chip">热量 {{ing.kcalText}}</text>
+                <text class="metric-chip">蛋白 {{ing.proteinText}}</text>
+                <text class="metric-chip">脂肪 {{ing.fatText}}</text>
+              </view>
+            </view>
+            <text class="arrow-right">›</text>
+          </view>
+          <view wx:if="{{ing.isProxy}}" class="proxy-inline">
+            ⚠ 近似估算数据，建议优先选用实测肉类
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <view wx:else class="empty-card">
+      <text class="empty-icon">🥩</text>
+      <text class="empty-text">未找到匹配的食材，请更换关键词</text>
+    </view>
+  </block>
+
+  <!-- 营养剂库视图 -->
+  <block wx:else>
+    <scroll-view class="filter-scroll" scroll-x="true" enable-flex="true">
+      <view class="filter-row">
+        <view
+          wx:for="{{suppCategoryTabs}}"
+          wx:key="id"
+          class="filter-pill {{activeSuppCat === item.id ? 'filter-pill-active' : ''}}"
+          data-cat="{{item.id}}"
+          bindtap="onSelectSuppCat"
+        >
+          <text>{{item.icon}}</text>
+          <text>{{item.name}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view class="summary-strip">
+      <text class="muted-sm">单个核算基准（每1g / 每1粒 / 每1片）· 匹配 {{filteredSupplements.length}} 款</text>
+    </view>
+
+    <view
+      wx:for="{{filteredSupplements}}"
+      wx:key="id"
+      class="card supp-card"
+      data-id="{{item.id}}"
+      bindtap="onOpenSupplement"
+    >
+      <view class="supp-top">
+        <view class="supp-icon-box">{{item.icon}}</view>
+        <view class="supp-main">
+          <view class="supp-name-row">
+            <text class="supp-name">{{item.name}}</text>
+          </view>
+          <view class="supp-tags">
+            <text class="badge badge-orange">{{item.category}}</text>
+            <text class="badge badge-stone">{{item.unit_label}}</text>
+            <text wx:if="{{item.hasUnquantified}}" class="badge badge-proxy">含未定量项</text>
+          </view>
+        </view>
+        <text class="arrow-right">›</text>
+      </view>
+      <view class="supp-highlights">
+        <view wx:for="{{item.highlights}}" wx:for-item="hl" wx:key="label" class="hl-chip">
+          <text class="hl-label">{{hl.label}}</text>
+          <text class="hl-val">{{hl.value}}</text>
+        </view>
+      </view>
+      <view wx:if="{{item.note}}" class="supp-note">{{item.note}}</view>
+    </view>
+
+    <view wx:if="{{filteredSupplements.length === 0}}" class="empty-card">
+      <text class="empty-icon">💊</text>
+      <text class="empty-text">未找到匹配的营养剂</text>
+    </view>
+  </block>
+
+  <!-- 食材详情弹窗 -->
+  <view wx:if="{{selectedIngredient}}" class="modal-mask" bindtap="onCloseModals">
+    <view class="modal-sheet" catchtap="noop">
+      <view class="modal-header">
+        <view class="modal-title-wrap">
+          <view class="modal-title-row">
+            <text class="modal-role-icon">{{selectedIngredient.roleIcon}}</text>
+            <text class="modal-title">{{selectedIngredient.name}}</text>
+          </view>
+          <view class="modal-sub-row">
+            <text class="badge {{selectedIngredient.badgeClass}}">{{selectedIngredient.badgeFull}}</text>
+            <text class="badge badge-stone">{{selectedIngredient.category}} · {{selectedIngredient.roleLabel}}</text>
+          </view>
+        </view>
+        <view class="modal-close" bindtap="onCloseModals">✕</view>
+      </view>
+
+      <scroll-view class="modal-scroll" scroll-y="true">
+        <view wx:if="{{selectedIngredient.isProxy}}" class="alert-warning">
+          ⚠ 近似估算数据，建议优先选用实测肉类（该条为 {{selectedIngredient.badgeFull}} 映射数据）
+        </view>
+
+        <view class="meta-box">
+          <view class="meta-row">
+            <text class="meta-k">核算基准</text>
+            <text class="meta-v">每 100g 生鲜可食部（干物质 {{selectedIngredient.dryMatterText}}）</text>
+          </view>
+          <view class="meta-row">
+            <text class="meta-k">数据来源</text>
+            <text class="meta-v">{{selectedIngredient.source_code || '未标注'}}</text>
+          </view>
+          <view wx:if="{{selectedIngredient.source_note}}" class="meta-row">
+            <text class="meta-k">来源备注</text>
+            <text class="meta-v">{{selectedIngredient.source_note}}</text>
+          </view>
+        </view>
+
+        <view class="alert-info detail-hint">
+          说明：“未报告”表示原始数据库未检测该项，不代表含量为 0；“微量 (Tr)”在汇总计算时按 0 处理。
+        </view>
+
+        <view class="nutrient-grid">
+          <view
+            wx:for="{{selectedIngredient.fields}}"
+            wx:key="key"
+            class="nutrient-cell {{item.isMissing ? 'cell-missing' : ''}}"
+          >
+            <text class="cell-label">{{item.label}}</text>
+            <text class="cell-value {{item.isMissing ? 'val-missing' : (item.isTrace ? 'val-trace' : '')}}">{{item.text}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- 营养剂详情弹窗 -->
+  <view wx:if="{{selectedSupplement}}" class="modal-mask" bindtap="onCloseModals">
+    <view class="modal-sheet" catchtap="noop">
+      <view class="modal-header">
+        <view class="modal-title-wrap">
+          <view class="modal-title-row">
+            <text class="modal-role-icon">{{selectedSupplement.icon}}</text>
+            <text class="modal-title">{{selectedSupplement.name}}</text>
+          </view>
+          <view class="modal-sub-row">
+            <text class="badge badge-orange">{{selectedSupplement.category}}</text>
+            <text class="badge badge-stone">{{selectedSupplement.unit_label}}</text>
+            <text class="badge badge-blue">{{selectedSupplement.brand}}</text>
+          </view>
+        </view>
+        <view class="modal-close" bindtap="onCloseModals">✕</view>
+      </view>
+
+      <scroll-view class="modal-scroll" scroll-y="true">
+        <view wx:if="{{selectedSupplement.note}}" class="alert-warning">
+          📌 使用与折算说明：{{selectedSupplement.note}}
+        </view>
+
+        <view wx:if="{{selectedSupplement.unquantifiedList.length > 0}}" class="alert-info detail-hint">
+          未定量项（不计入汇总）：{{selectedSupplement.unquantifiedText}}
+        </view>
+
+        <view class="supp-detail-title">单个基准有效营养成分（{{selectedSupplement.unit_label}}）</view>
+        <view class="nutrient-grid">
+          <view wx:for="{{selectedSupplement.nutrientRows}}" wx:key="key" class="nutrient-cell">
+            <text class="cell-label">{{item.label}}</text>
+            <text class="cell-value">{{item.valueText}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

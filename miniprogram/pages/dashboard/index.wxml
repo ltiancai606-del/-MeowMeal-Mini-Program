@@ -1,0 +1,115 @@
+<view class="dash-page">
+  <view class="dash-hero">
+    <view class="hero-top">
+      <view>
+        <text class="hero-hello">你好，{{user.nickname}}</text>
+        <text class="hero-sub">科学熟自制 · 每一口都精准达标</text>
+      </view>
+      <view class="hero-btn" bindtap="goCreateRecipe">+ 新建食谱</view>
+    </view>
+
+    <view class="hero-stats">
+      <view class="stat-pill">
+        <text class="stat-num">{{cats.length}}</text>
+        <text class="stat-lbl">只猫咪</text>
+      </view>
+      <view class="stat-pill">
+        <text class="stat-num">{{recipesCount}}</text>
+        <text class="stat-lbl">份食谱</text>
+      </view>
+      <view class="stat-pill">
+        <text class="stat-num">{{inventoryCount}}</text>
+        <text class="stat-lbl">项库存</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="dash-body">
+    <!-- 临期预警 -->
+    <view wx:if="{{expiringCount > 0 || expiredCount > 0}}" class="alert-warning" bindtap="goInventory">
+      <text>⚠️ 冰箱提醒：</text>
+      <text wx:if="{{expiringCount > 0}}">{{expiringCount}} 种食材临期</text>
+      <text wx:if="{{expiringCount > 0 && expiredCount > 0}}">，</text>
+      <text wx:if="{{expiredCount > 0}}">{{expiredCount}} 种已过期</text>
+      <text>，点击查看 →</text>
+    </view>
+
+    <!-- 执行中食谱 -->
+    <view class="card">
+      <view class="section-header">
+        <text class="section-title">🍲 当前执行食谱</text>
+        <text class="link-orange" bindtap="goRecipes">全部食谱 →</text>
+      </view>
+
+      <block wx:if="{{activeRecipe}}">
+        <view class="active-card" bindtap="goActiveRecipeDetail">
+          <view class="row-between">
+            <text class="active-name">{{activeRecipe.name}}</text>
+            <text class="badge badge-orange">{{activeRecipe.standard}} · {{activeRecipe.lifeStageText}}</text>
+          </view>
+          <view class="active-meta">
+            <text>总量 {{activeRecipe.totalWeight}}g</text>
+            <text>·</text>
+            <text>热量 {{activeRecipe.totalKcal}} kcal</text>
+            <text>·</text>
+            <text>钙磷比 {{activeRecipe.caPRatio}}:1</text>
+          </view>
+          <view class="me-bar">
+            <view class="me-protein" style="width: {{activeRecipe.proteinPct}}%;"></view>
+            <view class="me-fat" style="width: {{activeRecipe.fatPct}}%;"></view>
+            <view class="me-carb" style="width: {{activeRecipe.carbPct}}%;"></view>
+          </view>
+          <view class="row-between me-legend">
+            <text>蛋白 {{activeRecipe.proteinPct}}% · 脂肪 {{activeRecipe.fatPct}}%</text>
+            <text class="link-orange">查看达标分析 ›</text>
+          </view>
+        </view>
+      </block>
+
+      <view wx:else class="empty-box" bindtap="goCreateRecipe">
+        <text class="muted">暂无执行中的食谱，点击新建一份科学熟自制食谱</text>
+      </view>
+    </view>
+
+    <!-- 猫咪档案横滑 -->
+    <view class="card">
+      <view class="section-header">
+        <text class="section-title">🐾 我的猫咪</text>
+        <text class="link-orange" bindtap="goProfile">管理档案 →</text>
+      </view>
+      <scroll-view scroll-x class="cat-scroll" enable-flex="true">
+        <view wx:for="{{cats}}" wx:key="id" class="cat-chip" bindtap="goProfile">
+          <view class="cat-avatar">🐱</view>
+          <text class="cat-name">{{item.name}}</text>
+          <text class="muted-sm">{{item.weight}}kg · {{item.age}}岁</text>
+          <text class="badge {{item.neutered ? 'badge-green' : 'badge-stone'}}">{{item.neutered ? '已绝育' : '未绝育'}}</text>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 底层营养库入口 -->
+    <view class="card" style="padding: 12rpx 28rpx;">
+      <view class="nav-row" bindtap="goNutritionIngredients">
+        <view class="nav-row-left">
+          <view class="nav-icon bg-orange-soft">🥩</view>
+          <view>
+            <text class="nav-row-title">食材营养库</text>
+            <text class="muted-sm">176 项肉类/蛋类/海鲜/油脂 · 实测与置信度分级</text>
+          </view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+      <view class="divider"></view>
+      <view class="nav-row" bindtap="goNutritionSupplements">
+        <view class="nav-row-left">
+          <view class="nav-icon bg-blue-soft">💊</view>
+          <view>
+            <text class="nav-row-title">营养补剂库</text>
+            <text class="muted-sm">10 款常见补剂 · 按单基准 (g / 粒 / 片) 核算</text>
+          </view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+  </view>
+</view>

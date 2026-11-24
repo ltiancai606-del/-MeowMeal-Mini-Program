@@ -1,0 +1,285 @@
+.profile-hero {
+  background: linear-gradient(135deg, #FF7B4A 0%, #FF9668 100%);
+  border-radius: 36rpx;
+  padding: 36rpx 32rpx;
+  margin-bottom: 24rpx;
+  color: #FFFFFF;
+  box-shadow: 0 10rpx 28rpx rgba(255, 123, 74, 0.25);
+}
+
+.hero-top {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  margin-bottom: 28rpx;
+}
+
+.avatar-box {
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 999rpx;
+  background-color: rgba(255, 255, 255, 0.24);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 46rpx;
+}
+
+.hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.hero-name {
+  font-size: 36rpx;
+  font-weight: 800;
+}
+
+.hero-sub {
+  font-size: 23rpx;
+  opacity: 0.9;
+}
+
+.hero-stats {
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.16);
+  border-radius: 24rpx;
+  padding: 20rpx 12rpx;
+}
+
+.hero-stat-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+}
+
+.hero-stat-num {
+  font-size: 34rpx;
+  font-weight: 800;
+}
+
+.hero-stat-label {
+  font-size: 21rpx;
+  opacity: 0.9;
+}
+
+.hero-stat-divider {
+  width: 2rpx;
+  height: 44rpx;
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+.cat-tabs {
+  white-space: nowrap;
+  margin-bottom: 20rpx;
+}
+
+.cat-tabs-row {
+  display: inline-flex;
+  gap: 12rpx;
+}
+
+.cat-tab {
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+  background-color: #F5F5F4;
+  color: #57534E;
+  font-size: 25rpx;
+  font-weight: 600;
+}
+
+.cat-tab-active {
+  background-color: #FF7B4A;
+  color: #FFFFFF;
+}
+
+.cat-detail-box {
+  background-color: #F9F7F4;
+  border-radius: 26rpx;
+  padding: 24rpx;
+}
+
+.cat-detail-top {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.cat-avatar-lg {
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 999rpx;
+  background-color: #FFEDD5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42rpx;
+  flex-shrink: 0;
+}
+
+.cat-detail-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.cat-name-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-bottom: 6rpx;
+}
+
+.cat-detail-name {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #292524;
+}
+
+.edit-pill {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  background-color: #FFFFFF;
+  color: #FF7B4A;
+  font-size: 23rpx;
+  font-weight: 700;
+  border: 1rpx solid #FED7AA;
+}
+
+.cat-tags-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 12rpx;
+}
+
+.tag-title {
+  font-size: 23rpx;
+  color: #78716C;
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #F5F5F4;
+}
+
+.no-border {
+  border-bottom: none;
+  padding-bottom: 4rpx;
+}
+
+.menu-left {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.menu-icon {
+  width: 68rpx;
+  height: 68rpx;
+  border-radius: 20rpx;
+  background-color: #FFFAF5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+}
+
+.menu-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #292524;
+  margin-bottom: 4rpx;
+}
+
+.menu-sub {
+  display: block;
+  font-size: 22rpx;
+  color: #A8A29E;
+}
+
+.menu-arrow {
+  font-size: 36rpx;
+  color: #D6D3D1;
+}
+
+.form-item {
+  margin-bottom: 22rpx;
+}
+
+.form-label {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #57534E;
+  margin-bottom: 10rpx;
+}
+
+.form-grid {
+  display: flex;
+  gap: 16rpx;
+}
+
+.half {
+  flex: 1;
+}
+
+.form-input {
+  width: 100%;
+  height: 84rpx;
+  background-color: #F9F7F4;
+  border: 1rpx solid #E7E5E4;
+  border-radius: 20rpx;
+  padding: 0 22rpx;
+  font-size: 27rpx;
+  color: #292524;
+}
+
+.seg-row {
+  display: flex;
+  gap: 10rpx;
+}
+
+.seg-btn {
+  flex: 1;
+  height: 84rpx;
+  border-radius: 20rpx;
+  background-color: #F9F7F4;
+  color: #57534E;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 25rpx;
+  font-weight: 600;
+  border: 1rpx solid #E7E5E4;
+}
+
+.seg-active {
+  background-color: #FFFAF5;
+  color: #FF7B4A;
+  border-color: #FF7B4A;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 12rpx;
+}
+
+.action-del {
+  width: 170rpx;
+}
+
+.action-save {
+  flex: 1;
+}

@@ -1,0 +1,86 @@
+<view class="page-wrap">
+  <view class="row-between" style="margin-bottom: 24rpx;">
+    <text class="section-title">🍽️ 食谱管理</text>
+    <view class="create-btn" bindtap="goCreate">+ 新建食谱</view>
+  </view>
+
+  <view class="search-box">
+    <text class="muted">🔍</text>
+    <input
+      class="search-input"
+      placeholder="搜索食谱名称..."
+      value="{{searchQuery}}"
+      bindinput="onSearchInput"
+    />
+  </view>
+
+  <view class="tabs-row">
+    <view
+      wx:for="{{tabs}}"
+      wx:key="id"
+      class="tab-pill {{activeTab === item.id ? 'tab-pill-active' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="onSelectTab"
+    >
+      {{item.label}}
+    </view>
+  </view>
+
+  <block wx:if="{{recipeCards.length > 0}}">
+    <view
+      wx:for="{{recipeCards}}"
+      wx:key="id"
+      class="card"
+      data-id="{{item.id}}"
+      bindtap="goDetail"
+    >
+      <view class="row-between" style="margin-bottom: 14rpx;">
+        <view class="tag-row">
+          <text class="badge {{item.isActive ? 'badge-orange' : 'badge-stone'}}">{{item.statusText}}</text>
+          <text class="badge badge-blue">{{item.stdText}}</text>
+          <text wx:if="{{item.highRiskCount > 0}}" class="badge badge-red">⚠ {{item.highRiskCount}}项超上限</text>
+        </view>
+        <text class="muted">›</text>
+      </view>
+
+      <text class="recipe-name">{{item.name}}</text>
+
+      <view class="tag-row" style="margin: 12rpx 0;">
+        <text wx:for="{{item.catNames}}" wx:key="*this" wx:for-item="catName" class="badge badge-orange">🐱 {{catName}}</text>
+      </view>
+
+      <view class="meta-row">
+        <text>⌚ {{item.days}}天周期</text>
+        <text>总量 {{item.totalWeight}}g</text>
+        <text>钙磷比 {{item.caPRatio}}:1</text>
+      </view>
+
+      <view class="tag-row" style="margin: 14rpx 0 20rpx;">
+        <text wx:for="{{item.ingredientTags}}" wx:key="*this" wx:for-item="ingTag" class="badge badge-stone">{{ingTag}}</text>
+      </view>
+
+      <view class="row-between" style="margin-bottom: 10rpx;">
+        <text class="muted-sm">代谢能比例 (ME)</text>
+        <text class="muted-sm">蛋白 {{item.proteinPct}}% · 脂肪 {{item.fatPct}}%</text>
+      </view>
+      <view class="me-bar">
+        <view class="me-protein" style="width: {{item.proteinPct}}%;"></view>
+        <view class="me-fat" style="width: {{item.fatPct}}%;"></view>
+        <view class="me-carb" style="width: {{item.carbPct}}%;"></view>
+      </view>
+
+      <view
+        wx:if="{{!item.isActive}}"
+        class="quick-start-btn"
+        data-id="{{item.id}}"
+        catchtap="onQuickStart"
+      >
+        开始执行
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="card" style="text-align: center; padding: 80rpx 32rpx;">
+    <text class="muted">暂无匹配的食谱</text>
+  </view>
+</view>

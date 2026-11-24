@@ -1,0 +1,182 @@
+<view class="page-wrap">
+  <!-- 顶部标题与添加 -->
+  <view class="top-bar">
+    <view>
+      <view class="page-title">冰箱库存</view>
+      <view class="muted-sm">共 {{stats.all}} 项 · 总重 {{totalWeightKg}} kg</view>
+    </view>
+    <view class="add-btn" bindtap="onOpenAdd">+ 入库食材</view>
+  </view>
+
+  <!-- 临期预警 -->
+  <view wx:if="{{stats.expiring > 0 || stats.expired > 0}}" class="alert-warning">
+    <text wx:if="{{stats.expired > 0}}">🚨 有 {{stats.expired}} 项食材已过期，建议清理；</text>
+    <text wx:if="{{stats.expiring > 0}}">⏰ 有 {{stats.expiring}} 项食材将在 3 天内临期，生成食谱时可优先“按冰箱库存”消耗。</text>
+  </view>
+
+  <!-- 状态汇总筛选 -->
+  <view class="stat-tabs">
+    <view
+      wx:for="{{statusTabs}}"
+      wx:key="id"
+      class="stat-tab {{activeFilter === item.id ? 'stat-tab-active' : ''}}"
+      data-filter="{{item.id}}"
+      bindtap="onSelectFilter"
+    >
+      <text class="stat-num {{item.numClass}}">{{item.count}}</text>
+      <text class="stat-label">{{item.label}}</text>
+    </view>
+  </view>
+
+  <!-- 搜索 -->
+  <view class="search-box">
+    <text class="search-icon">🔍</text>
+    <input
+      class="search-input"
+      placeholder="搜索库存食材名称或分类..."
+      value="{{keyword}}"
+      bindinput="onSearchInput"
+    />
+    <text wx:if="{{keyword}}" class="search-clear" bindtap="onClearSearch">✕</text>
+  </view>
+
+  <!-- 库存列表 -->
+  <block wx:if="{{displayItems.length > 0}}">
+    <view
+      wx:for="{{displayItems}}"
+      wx:key="id"
+      class="card inv-card"
+      data-id="{{item.id}}"
+      bindtap="onOpenEdit"
+    >
+      <view class="inv-top">
+        <view class="inv-icon-box">{{item.roleIcon}}</view>
+        <view class="inv-main">
+          <view class="inv-name-row">
+            <text class="inv-name">{{item.name}}</text>
+            <text class="badge {{item.statusBadgeClass}}">{{item.statusText}}</text>
+          </view>
+          <view class="inv-sub-row">
+            <text class="badge {{item.confidenceClass}}">{{item.confidenceLabel}}</text>
+            <text class="muted-sm">{{item.category}} · 到期 {{item.expiryDate}}</text>
+          </view>
+        </view>
+        <view class="inv-right">
+          <text class="inv-weight">{{item.weight}}g</text>
+          <text class="inv-price">¥{{item.price}}</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="empty-card">
+    <text class="empty-icon">🧊</text>
+    <text class="empty-text">当前筛选条件下暂无库存食材</text>
+    <view class="btn-primary empty-btn" bindtap="onOpenAdd">添加第一项食材</view>
+  </view>
+
+  <!-- 新增/编辑库存弹窗 -->
+  <view wx:if="{{showModal}}" class="modal-mask" bindtap="onCloseModal">
+    <view class="modal-sheet" catchtap="noop">
+      <view class="modal-header">
+        <text class="modal-title">{{editingId ? '编辑库存食材' : '新增库存食材'}}</text>
+        <view class="modal-close" bindtap="onCloseModal">✕</view>
+      </view>
+
+      <scroll-view class="modal-scroll" scroll-y="true">
+        <!-- 选择食材 -->
+        <view class="form-item">
+          <text class="form-label">选择食材（来自 176 项营养库）</text>
+          <view class="picker-trigger" bindtap="onOpenIngPicker">
+            <view class="picker-left">
+              <text class="picker-icon">{{selectedIngMeta.icon}}</text>
+              <text class="picker-name">{{selectedIngMeta.name}}</text>
+            </view>
+            <text class="picker-arrow">更换 ›</text>
+          </view>
+          <view wx:if="{{selectedIngMeta.isProxy}}" class="proxy-inline">
+            ⚠ 近似估算数据，建议优先选用实测肉类
+          </view>
+        </view>
+
+        <view class="form-grid">
+          <view class="form-item half">
+            <text class="form-label">库存重量 (g)</text>
+            <input
+              class="form-input"
+              type="digit"
+              value="{{formWeight}}"
+              placeholder="如 500"
+              bindinput="onWeightInput"
+            />
+          </view>
+          <view class="form-item half">
+            <text class="form-label">购入价格 (¥)</text>
+            <input
+              class="form-input"
+              type="digit"
+              value="{{formPrice}}"
+              placeholder="如 25"
+              bindinput="onPriceInput"
+            />
+          </view>
+        </view>
+
+        <view class="form-grid">
+          <view class="form-item half">
+            <text class="form-label">入库 / 生产日期</text>
+            <picker mode="date" value="{{formProdDate}}" bindchange="onProdDateChange">
+              <view class="form-input date-input">{{formProdDate}}</view>
+            </picker>
+          </view>
+          <view class="form-item half">
+            <text class="form-label">保质到期日</text>
+            <picker mode="date" value="{{formExpiryDate}}" bindchange="onExpiryDateChange">
+              <view class="form-input date-input">{{formExpiryDate}}</view>
+            </picker>
+          </view>
+        </view>
+
+        <view class="modal-actions">
+          <view wx:if="{{editingId}}" class="btn-danger action-del" bindtap="onDeleteItem">删除</view>
+          <view class="btn-primary action-save" bindtap="onSaveItem">保存库存</view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- 176 项食材搜索选择器 -->
+  <view wx:if="{{showIngPicker}}" class="modal-mask picker-mask" bindtap="onCloseIngPicker">
+    <view class="modal-sheet" catchtap="noop">
+      <view class="modal-header">
+        <text class="modal-title">选择入库食材</text>
+        <view class="modal-close" bindtap="onCloseIngPicker">✕</view>
+      </view>
+      <view class="search-box">
+        <text class="search-icon">🔍</text>
+        <input
+          class="search-input"
+          placeholder="搜索鸡胸、牛肉、青口贝、鸡肝..."
+          value="{{ingPickerKeyword}}"
+          bindinput="onIngPickerSearch"
+        />
+      </view>
+      <scroll-view class="modal-scroll" scroll-y="true">
+        <view
+          wx:for="{{pickerIngredients}}"
+          wx:key="id"
+          class="picker-row {{item.id === formMeatId ? 'picker-row-active' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onPickIngredient"
+        >
+          <text class="picker-row-icon">{{item.roleIcon}}</text>
+          <view class="picker-row-main">
+            <text class="picker-row-name">{{item.name}}</text>
+            <text class="muted-sm">{{item.category}} · {{item.roleLabel}}</text>
+          </view>
+          <text class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

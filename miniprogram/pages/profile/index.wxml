@@ -1,0 +1,178 @@
+<view class="page-wrap">
+  <!-- 顶部橙色个人头部卡片 -->
+  <view class="profile-hero">
+    <view class="hero-top">
+      <view class="avatar-box">🐾</view>
+      <view class="hero-info">
+        <text class="hero-name">{{user.nickname}}</text>
+        <text class="hero-sub">已使用喵膳 {{user.daysUsed}} 天 · 科学熟自制</text>
+      </view>
+    </view>
+    <view class="hero-stats">
+      <view class="hero-stat-item">
+        <text class="hero-stat-num">{{cats.length}}</text>
+        <text class="hero-stat-label">猫咪档案</text>
+      </view>
+      <view class="hero-stat-divider"></view>
+      <view class="hero-stat-item">
+        <text class="hero-stat-num">{{recipeCount}}</text>
+        <text class="hero-stat-label">专属食谱</text>
+      </view>
+      <view class="hero-stat-divider"></view>
+      <view class="hero-stat-item">
+        <text class="hero-stat-num">{{inventoryCount}}</text>
+        <text class="hero-stat-label">冰箱食材</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 猫咪档案区 -->
+  <view class="card">
+    <view class="section-header">
+      <text class="section-title">🐱 我的猫咪</text>
+      <text class="link-orange" bindtap="onOpenAddCat">+ 添加猫咪</text>
+    </view>
+
+    <scroll-view wx:if="{{cats.length > 0}}" class="cat-tabs" scroll-x="true" enable-flex="true">
+      <view class="cat-tabs-row">
+        <view
+          wx:for="{{cats}}"
+          wx:key="id"
+          class="cat-tab {{selectedCatId === item.id ? 'cat-tab-active' : ''}}"
+          data-id="{{item.id}}"
+          bindtap="onSelectCat"
+        >
+          <text>{{item.gender === 'male' ? '♂' : '♀'}} {{item.name}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view wx:if="{{activeCat}}" class="cat-detail-box">
+      <view class="cat-detail-top">
+        <view class="cat-avatar-lg">🐱</view>
+        <view class="cat-detail-main">
+          <view class="cat-name-row">
+            <text class="cat-detail-name">{{activeCat.name}}</text>
+            <text class="badge badge-orange">{{activeCat.lifeStageLabel}}</text>
+            <text class="badge badge-stone">{{activeCat.neutered ? '已绝育' : '未绝育'}}</text>
+          </view>
+          <text class="muted">{{activeCat.age}} 岁 · {{activeCat.weight}} kg · 预估日需 {{activeCat.dailyMeatG}}g 熟自制</text>
+        </view>
+        <view class="edit-pill" bindtap="onOpenEditCat">编辑</view>
+      </view>
+
+      <view class="cat-tags-row">
+        <text class="tag-title">过敏忌口：</text>
+        <block wx:if="{{activeCat.allergies.length > 0}}">
+          <text wx:for="{{activeCat.allergies}}" wx:key="*this" class="badge badge-red">{{item}}</text>
+        </block>
+        <text wx:else class="muted-sm">无已知过敏原</text>
+      </view>
+
+      <view class="cat-tags-row">
+        <text class="tag-title">饮食偏好：</text>
+        <block wx:if="{{activeCat.dietNeeds.length > 0}}">
+          <text wx:for="{{activeCat.dietNeeds}}" wx:key="*this" class="badge badge-blue">{{item}}</text>
+        </block>
+        <text wx:else class="muted-sm">常规均衡养护</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 数据库与标准说明 -->
+  <view class="card">
+    <view class="section-header">
+      <text class="section-title">📚 专业工具与标准</text>
+    </view>
+    <view class="menu-item" bindtap="onGoIngredients">
+      <view class="menu-left">
+        <text class="menu-icon">🥩</text>
+        <view>
+          <text class="menu-title">食材营养库</text>
+          <text class="menu-sub">176 项生鲜肉类/海鲜/油脂 · 置信度分级</text>
+        </view>
+      </view>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="onGoSupplements">
+      <view class="menu-left">
+        <text class="menu-icon">💊</text>
+        <view>
+          <text class="menu-title">营养剂库</text>
+          <text class="menu-sub">10 款常见补剂 · 钙粉/鱼油/碘/维B/维E/牛磺酸</text>
+        </view>
+      </view>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item no-border">
+      <view class="menu-left">
+        <text class="menu-icon">⚖️</text>
+        <view>
+          <text class="menu-title">内置营养标准</text>
+          <text class="menu-sub">NRC 2006 (RA / SUL) + AAFCO 2016/2026 (Min / Max)</text>
+        </view>
+      </view>
+      <text class="badge badge-green">已对齐</text>
+    </view>
+  </view>
+
+  <!-- 新增/编辑猫咪弹窗 -->
+  <view wx:if="{{showCatModal}}" class="modal-mask" bindtap="onCloseCatModal">
+    <view class="modal-sheet" catchtap="noop">
+      <view class="modal-header">
+        <text class="modal-title">{{editingCatId ? '编辑猫咪档案' : '添加猫咪档案'}}</text>
+        <view class="modal-close" bindtap="onCloseCatModal">✕</view>
+      </view>
+
+      <scroll-view class="modal-scroll" scroll-y="true">
+        <view class="form-item">
+          <text class="form-label">猫咪昵称</text>
+          <input class="form-input" value="{{formName}}" placeholder="例如：汤圆" bindinput="onNameInput" />
+        </view>
+
+        <view class="form-grid">
+          <view class="form-item half">
+            <text class="form-label">年龄（岁，幼猫可填 0.5）</text>
+            <input class="form-input" type="digit" value="{{formAge}}" placeholder="2" bindinput="onAgeInput" />
+          </view>
+          <view class="form-item half">
+            <text class="form-label">体重（kg）</text>
+            <input class="form-input" type="digit" value="{{formWeight}}" placeholder="4.5" bindinput="onWeightInput" />
+          </view>
+        </view>
+
+        <view class="form-grid">
+          <view class="form-item half">
+            <text class="form-label">性别</text>
+            <view class="seg-row">
+              <view class="seg-btn {{formGender === 'male' ? 'seg-active' : ''}}" data-val="male" bindtap="onGenderTap">♂ 公猫</view>
+              <view class="seg-btn {{formGender === 'female' ? 'seg-active' : ''}}" data-val="female" bindtap="onGenderTap">♀ 母猫</view>
+            </view>
+          </view>
+          <view class="form-item half">
+            <text class="form-label">绝育状态</text>
+            <view class="seg-row">
+              <view class="seg-btn {{formNeutered ? 'seg-active' : ''}}" data-val="1" bindtap="onNeuteredTap">已绝育</view>
+              <view class="seg-btn {{!formNeutered ? 'seg-active' : ''}}" data-val="0" bindtap="onNeuteredTap">未绝育</view>
+            </view>
+          </view>
+        </view>
+
+        <view class="form-item">
+          <text class="form-label">过敏食材（逗号分隔，生成食谱时自动排除）</text>
+          <input class="form-input" value="{{formAllergies}}" placeholder="如：牛肉, 鱼类" bindinput="onAllergiesInput" />
+        </view>
+
+        <view class="form-item">
+          <text class="form-label">饮食养护需求（逗号分隔）</text>
+          <input class="form-input" value="{{formDietNeeds}}" placeholder="如：化毛, 美毛, 护肾" bindinput="onDietNeedsInput" />
+        </view>
+
+        <view class="modal-actions">
+          <view wx:if="{{editingCatId && cats.length > 1}}" class="btn-danger action-del" bindtap="onDeleteCat">删除</view>
+          <view class="btn-primary action-save" bindtap="onSaveCat">保存档案</view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

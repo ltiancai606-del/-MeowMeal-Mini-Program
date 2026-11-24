@@ -1,0 +1,44 @@
+{
+  "pages": [
+    "pages/dashboard/index",
+    "pages/recipes/index",
+    "pages/inventory/index",
+    "pages/profile/index",
+    "pages/nutrition/index",
+    "pages/recipe-create/index",
+    "pages/recipe-detail/index"
+  ],
+  "window": {
+    "backgroundTextStyle": "dark",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "navigationBarTitleText": "喵膳 MeowMeal",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F9F7F4"
+  },
+  "tabBar": {
+    "color": "#9A948D",
+    "selectedColor": "#FF7B4A",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/dashboard/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/recipes/index",
+        "text": "食谱"
+      },
+      {
+        "pagePath": "pages/inventory/index",
+        "text": "冰箱"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

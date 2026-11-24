@@ -1,0 +1,86 @@
+.create-btn {
+  background-color: #FF7B4A;
+  color: #FFFFFF;
+  font-size: 24rpx;
+  font-weight: 700;
+  padding: 14rpx 28rpx;
+  border-radius: 999rpx;
+}
+
+.tabs-row {
+  display: flex;
+  gap: 14rpx;
+  margin-bottom: 24rpx;
+  overflow-x: auto;
+}
+
+.tab-pill {
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  background-color: #FFFFFF;
+  color: #78716C;
+  border: 1rpx solid #F5F5F4;
+}
+
+.tab-pill-active {
+  background-color: #FF7B4A;
+  color: #FFFFFF;
+  border-color: #FF7B4A;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  align-items: center;
+}
+
+.recipe-name {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #292524;
+}
+
+.meta-row {
+  display: flex;
+  gap: 18rpx;
+  font-size: 22rpx;
+  color: #78716C;
+}
+
+.me-bar {
+  height: 14rpx;
+  border-radius: 999rpx;
+  background-color: #E7E5E4;
+  display: flex;
+  overflow: hidden;
+}
+
+.me-protein {
+  background-color: #FF7B4A;
+  height: 100%;
+}
+
+.me-fat {
+  background-color: #FBBF24;
+  height: 100%;
+}
+
+.me-carb {
+  background-color: #10B981;
+  height: 100%;
+}
+
+.quick-start-btn {
+  margin-top: 24rpx;
+  background-color: #FF7B4A;
+  color: #FFFFFF;
+  text-align: center;
+  padding: 18rpx;
+  border-radius: 22rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+}
