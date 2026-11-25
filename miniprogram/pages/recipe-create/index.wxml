@@ -1,3 +1,15 @@
+<!-- 自定义顶部导航栏（支持未保存食谱返回弹窗拦截） -->
+<view class="custom-nav" style="padding-top: {{statusBarHeight}}px;">
+  <view class="custom-nav-bar" style="height: {{navBarHeight}}px;">
+    <view class="custom-nav-back" bindtap="onNavBack">
+      <view class="custom-nav-chevron"></view>
+    </view>
+    <text class="custom-nav-title">新建专属食谱</text>
+    <view class="custom-nav-right"></view>
+  </view>
+</view>
+<view style="height: {{navTotalHeight}}px;"></view>
+
 <view class="create-wrap">
   <!-- 顶部步骤条 -->
   <view class="step-bar">
@@ -159,7 +171,17 @@
     <view class="card">
       <view class="section-header">
         <text class="section-title">🥩 食材清单 ({{ingredientRows.length}} 项)</text>
-        <text class="link-orange" bindtap="onOpenAddIngredient">+ 添加食材</text>
+        <view class="supp-header-actions">
+          <text class="smart-btn" bindtap="onOpenSmartParser">✨ 智能识别</text>
+          <text class="link-orange" bindtap="onOpenAddIngredient">+ 添加食材</text>
+        </view>
+      </view>
+
+      <view wx:if="{{mode === 'by_inventory'}}" class="fridge-legend-bar">
+        <text class="fridge-badge">🧊 冰箱库存</text>
+        <text class="muted-sm">来自冰箱可用库存</text>
+        <text class="buy-badge">🛒 需补购</text>
+        <text class="muted-sm">需额外采购补充</text>
       </view>
 
       <view wx:for="{{ingredientRows}}" wx:key="index" class="edit-row">
@@ -168,6 +190,9 @@
             <text class="row-icon">{{item.roleIcon}}</text>
             <view class="row-info">
               <view class="row-name-line">
+                <text wx:if="{{mode === 'by_inventory' && item.isFromFridge}}" class="fridge-badge">🧊 冰箱 {{item.fridgeStockG}}g</text>
+                <text wx:if="{{mode === 'by_inventory' && !item.isFromFridge}}" class="buy-badge">🛒 需补购</text>
+                <text wx:if="{{mode === 'by_inventory' && item.isFromFridge && item.needBuyG > 0}}" class="buy-badge">🛒 补买{{item.needBuyG}}g</text>
                 <text class="row-name">{{item.name}}</text>
                 <text class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
               </view>
@@ -245,50 +270,249 @@
     </view>
   </block>
 
-  <!-- Step 4: 最终确认 -->
+  <!-- Step 4: 食谱详情页-编辑（实时校验达标结果并微调后保存） -->
   <block wx:if="{{step === 4}}">
-    <view class="card card-warm">
-      <view class="confirm-title">{{name}}</view>
-      <view class="confirm-badges">
-        <text class="badge badge-orange">{{standard}} 标准</text>
-        <text class="badge badge-blue">{{lifeStage === 'kitten' ? '幼猫生长期' : '成猫维持期'}}</text>
-        <text class="badge badge-stone">{{days}} 天食谱</text>
+    <!-- 顶部总览卡片 -->
+    <view class="card hero-card">
+      <view class="hero-top">
+        <view class="hero-title-wrap">
+          <text class="hero-title">{{name || '新建熟自制食谱'}}</text>
+          <view class="hero-tags">
+            <text class="badge badge-orange">详情编辑校验</text>
+            <text class="badge badge-stone">{{days}} 天</text>
+            <text wx:if="{{catNamesText}}" class="badge badge-blue">🐱 {{catNamesText}}</text>
+          </view>
+        </view>
       </view>
-      <view class="confirm-grid">
-        <view class="confirm-cell">
-          <text class="confirm-val">{{liveSummary.totalWeightG}} g</text>
-          <text class="muted-sm">生鲜肉类总重</text>
+
+      <!-- 关键指标 -->
+      <view class="kpi-grid">
+        <view class="kpi-cell">
+          <text class="kpi-val">{{liveSummary.totalWeightG}}g</text>
+          <text class="muted-sm">生鲜总重</text>
         </view>
-        <view class="confirm-cell">
-          <text class="confirm-val">{{liveSummary.totalKcal}} kcal</text>
-          <text class="muted-sm">总代谢能</text>
+        <view class="kpi-cell">
+          <text class="kpi-val">{{liveSummary.totalKcal}}</text>
+          <text class="muted-sm">总热量 kcal</text>
         </view>
-        <view class="confirm-cell">
-          <text class="confirm-val {{liveSummary.caPClass}}">{{liveSummary.caPRatioText}}</text>
+        <view class="kpi-cell">
+          <text class="kpi-val {{liveSummary.caPClass}}">{{liveSummary.caPRatioText}}</text>
           <text class="muted-sm">钙磷比</text>
         </view>
+        <view class="kpi-cell">
+          <text class="kpi-val">{{liveSummary.dailyWeightG}}g</text>
+          <text class="muted-sm">日均生重</text>
+        </view>
+      </view>
+
+      <!-- ME 供能比 -->
+      <view class="me-bar">
+        <view class="me-seg me-pro" style="width: {{liveSummary.proteinPct}}%;"></view>
+        <view class="me-seg me-fat" style="width: {{liveSummary.fatPct}}%;"></view>
+        <view class="me-seg me-carb" style="width: {{liveSummary.carbPct}}%;"></view>
+      </view>
+      <view class="me-legend">
+        <text>蛋白质 ME {{liveSummary.proteinPct}}%</text>
+        <text>脂肪 ME {{liveSummary.fatPct}}%</text>
+        <text>碳水 ME {{liveSummary.carbPct}}%</text>
       </view>
     </view>
 
+    <!-- 高风险 SUL/Max 红灯警告 -->
     <view wx:if="{{liveSummary.highRiskAlerts.length > 0}}" class="alert-danger">
-      🚨 当前配方存在 {{liveSummary.highRiskAlerts.length}} 项超过 SUL/Max 上限的营养素，建议返回上一步调整肝脏或补剂用量。
+      <view class="alert-title">🚨 高风险超标警报（超过 SUL / Max 上限）</view>
+      <view wx:for="{{liveSummary.highRiskAlerts}}" wx:key="key">
+        • {{item.label}}：{{item.per1000kcalText}}/千卡（上限 {{item.max}} {{item.unit}}）
+      </view>
     </view>
 
+    <!-- 近似估算食材黄灯提示 -->
+    <view wx:if="{{liveSummary.proxyNames}}" class="alert-warning">
+      ⚠ 近似估算数据，建议优先选用实测肉类：{{liveSummary.proxyNames}}
+    </view>
+
+    <!-- 食材结构比例（饼状图） -->
+    <view wx:if="{{roleSlices.length > 0}}" class="card">
+      <view class="section-header">
+        <text class="section-title">📊 食材结构比例</text>
+        <text class="muted-sm">按生鲜克重占比</text>
+      </view>
+      <view class="pie-layout">
+        <view class="pie-ring" style="background: {{rolePieGradient}};">
+          <view class="pie-hole">
+            <text class="pie-center-val">{{liveSummary.totalWeightG}}g</text>
+            <text class="pie-center-sub">生鲜总重</text>
+          </view>
+        </view>
+        <view class="pie-legend">
+          <view wx:for="{{roleSlices}}" wx:key="role" class="pie-legend-row">
+            <view class="pie-legend-left">
+              <view class="pie-dot" style="background-color: {{item.color}};"></view>
+              <text class="pie-legend-name">{{item.icon}} {{item.label}}</text>
+            </view>
+            <view class="pie-legend-right">
+              <text class="pie-legend-pct">{{item.pct}}%</text>
+              <text class="pie-legend-g">{{item.weight}}g</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 营养达标分析（顶部切换营养标准 + 自动判定阶段 + 不合格项置顶） -->
     <view class="card">
-      <view class="section-title mb-16">食材与补剂清单</view>
-      <view wx:for="{{ingredientRows}}" wx:key="index" class="review-line">
-        <text>{{item.roleIcon}} {{item.name}}</text>
-        <text class="review-val">{{item.weight}} g</text>
+      <view class="section-header">
+        <text class="section-title">🚦 营养达标分析</text>
+        <text class="link-orange" bindtap="onOpenFullNutrients">全部 28 项 ›</text>
       </view>
-      <view class="review-divider"></view>
-      <view wx:for="{{supplementRows}}" wx:key="index" class="review-line">
-        <text>💊 {{item.name}}</text>
-        <text class="review-val">{{item.amount}} {{item.unit}}</text>
+
+      <view class="std-bar">
+        <view class="pill-group">
+          <view class="pill-opt {{standard === 'NRC' ? 'pill-opt-active' : ''}}" data-val="NRC" bindtap="onSelectStandard">NRC 2006</view>
+          <view class="pill-opt {{standard === 'AAFCO' ? 'pill-opt-active' : ''}}" data-val="AAFCO" bindtap="onSelectStandard">AAFCO</view>
+        </view>
+        <view class="stage-auto-tag">
+          <text>自动判定：{{lifeStageText}}</text>
+        </view>
+      </view>
+
+      <view wx:if="{{unqualifiedCount > 0}}" class="unqualified-banner">
+        <text class="unqualified-banner-title">⚠ 共 {{unqualifiedCount}} 项未达标（{{unqualifiedDetailText}}），已置顶展示</text>
+      </view>
+      <view wx:else class="qualified-banner">
+        <text class="qualified-banner-title">✓ 全部营养指标均已达标</text>
+      </view>
+
+      <view class="muted-sm mb-16">
+        比对基准：每 1,000 kcal 代谢能含量（小字为整份 {{liveSummary.totalWeightG}}g 食谱总含量）
+      </view>
+
+      <view wx:if="{{liveSummary.hasMissingData}}" class="alert-info mb-16">
+        ℹ️ 含未检测项，不代表为 0（标有 * 的营养素存在部分食材原始库未报告项，汇总时已自动跳过）。
+      </view>
+
+      <view class="eval-table">
+        <view
+          wx:for="{{displayEvaluations}}"
+          wx:key="key"
+          class="eval-row {{item.status === 'red' ? 'eval-row-red' : item.status === 'yellow' ? 'eval-row-yellow' : ''}}"
+        >
+          <view class="eval-left">
+            <text class="eval-name">{{item.label}}{{item.hasMissingSource ? ' *' : ''}}</text>
+            <text class="eval-bounds">标准：{{item.boundsText}}{{item.key === 'ca_p_ratio' ? '' : ' /千卡'}}</text>
+          </view>
+          <view class="eval-right">
+            <view class="eval-val-col">
+              <text class="eval-val">{{item.per1000kcalText}}<text wx:if="{{item.key !== 'ca_p_ratio'}}" class="eval-per-unit">/千卡</text></text>
+              <text wx:if="{{item.totalAmountText}}" class="eval-total-sub">{{item.totalAmountText}}</text>
+            </view>
+            <text class="traffic-dot traffic-{{item.status}}">{{item.statusSymbol}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="btn-outline mt-20" bindtap="onOpenFullNutrients">查看全部 28 项营养明细（标准库顺序）</view>
+    </view>
+
+    <!-- 食材清单（编辑态，调整后上方达标结果即时更新） -->
+    <view class="card">
+      <view class="section-header">
+        <text class="section-title">🥩 食材清单 ({{ingredientRows.length}} 项)</text>
+        <view class="supp-header-actions">
+          <text class="smart-btn" bindtap="onOpenSmartParser">✨ 智能识别</text>
+          <text class="link-orange" bindtap="onOpenAddIngredient">+ 添加食材</text>
+        </view>
+      </view>
+
+      <view wx:if="{{mode === 'by_inventory'}}" class="fridge-legend-bar">
+        <text class="fridge-badge">🧊 冰箱库存</text>
+        <text class="muted-sm">来自冰箱可用库存</text>
+        <text class="buy-badge">🛒 需补购</text>
+        <text class="muted-sm">需额外采购补充</text>
+      </view>
+
+      <view wx:for="{{ingredientRows}}" wx:key="index" class="edit-row">
+        <view class="edit-row-top">
+          <view class="edit-left" data-index="{{index}}" bindtap="onOpenReplaceIngredient">
+            <text class="row-icon">{{item.roleIcon}}</text>
+            <view class="row-info">
+              <view class="row-name-line">
+                <text wx:if="{{mode === 'by_inventory' && item.isFromFridge}}" class="fridge-badge">🧊 冰箱 {{item.fridgeStockG}}g</text>
+                <text wx:if="{{mode === 'by_inventory' && !item.isFromFridge}}" class="buy-badge">🛒 需补购</text>
+                <text wx:if="{{mode === 'by_inventory' && item.isFromFridge && item.needBuyG > 0}}" class="buy-badge">🛒 补买{{item.needBuyG}}g</text>
+                <text class="row-name">{{item.name}}</text>
+                <text class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
+              </view>
+              <text class="muted-sm">{{item.roleLabel}} · 占总重 {{item.pct}}% · 点击更换同类食材</text>
+            </view>
+          </view>
+          <text class="del-btn" data-index="{{index}}" bindtap="onRemoveIngredient">删除</text>
+        </view>
+
+        <view wx:if="{{item.isProxy}}" class="proxy-mini">⚠ 近似估算数据，建议优先选用实测肉类</view>
+
+        <view class="weight-ctrl">
+          <view class="step-btn" data-index="{{index}}" data-delta="-50" bindtap="onStepIngWeight">-50g</view>
+          <view class="weight-input-wrap">
+            <input
+              class="weight-input"
+              type="digit"
+              value="{{item.weight}}"
+              data-index="{{index}}"
+              bindinput="onIngWeightInput"
+            />
+            <text class="unit-suffix">g</text>
+          </view>
+          <view class="step-btn" data-index="{{index}}" data-delta="50" bindtap="onStepIngWeight">+50g</view>
+        </view>
       </view>
     </view>
 
-    <view wx:if="{{liveSummary.hasMissingData}}" class="alert-info">
-      ℹ️ 含未检测项，不代表为 0；保存后可在详情页查看完整 28 项营养红黄绿灯报告。
+    <!-- 营养补剂（编辑态，支持用量微调与智能重算） -->
+    <view class="card">
+      <view class="section-header">
+        <text class="section-title">💊 营养补剂 ({{supplementRows.length}} 项)</text>
+        <view class="supp-header-actions">
+          <text class="recalc-btn" bindtap="onRecalcSupplements">✨ 智能重算</text>
+          <text class="link-orange" bindtap="onOpenAddSupplement">+ 添加</text>
+        </view>
+      </view>
+
+      <view wx:for="{{supplementRows}}" wx:key="index" class="edit-row">
+        <view class="edit-row-top">
+          <view class="edit-left" data-index="{{index}}" bindtap="onOpenReplaceSupplement">
+            <text class="row-icon">💊</text>
+            <view class="row-info">
+              <view class="row-name-line">
+                <text class="row-name">{{item.name}}</text>
+              </view>
+              <text class="muted-sm">{{item.category}} · {{item.unitLabel}} · 点击更换补剂</text>
+            </view>
+          </view>
+          <text class="del-btn" data-index="{{index}}" bindtap="onRemoveSupplement">删除</text>
+        </view>
+
+        <view class="weight-ctrl">
+          <view class="weight-input-wrap full-input">
+            <input
+              class="weight-input"
+              type="digit"
+              value="{{item.amount}}"
+              data-index="{{index}}"
+              bindinput="onSuppAmountInput"
+            />
+            <text class="unit-suffix">{{item.unit}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view wx:if="{{supplementRows.length === 0}}" class="muted-sm">暂未添加补剂，可点击上方“智能重算”自动匹配</view>
+
+      <view wx:if="{{liveSummary.hasUnquantifiedFishOilVE || liveSummary.hasSyntheticVEReminder || liveSummary.hasBComplexCholineNote}}" class="alert-info mt-16">
+        <view wx:if="{{liveSummary.hasUnquantifiedFishOilVE}}">• 鱼油中所含微量维生素 E 未定量，计算时不计入总 VE。</view>
+        <view wx:if="{{liveSummary.hasSyntheticVEReminder}}">• 维生素 E 请核对天然/合成形式：合成 dl-α-生育酚乙酸酯需按 0.45 折算。</view>
+        <view wx:if="{{liveSummary.hasBComplexCholineNote}}">• 复合维 B 已同步累加按 41.1% 折算的元素胆碱。</view>
+      </view>
     </view>
   </block>
 
@@ -296,14 +520,14 @@
   <view class="bottom-bar">
     <view wx:if="{{step > 1}}" class="btn-secondary bottom-prev" bindtap="onPrevStep">上一步</view>
     <view wx:if="{{step < 4}}" class="btn-primary bottom-next" bindtap="onNextStep">
-      {{step === 2 ? '生成并微调配方' : '下一步'}}
+      {{step === 2 ? '生成并微调配方' : step === 3 ? '营养达标检查' : '下一步'}}
     </view>
-    <view wx:else class="btn-primary bottom-next" bindtap="onSaveRecipe">保存并查看详情</view>
+    <view wx:else class="btn-primary bottom-next" bindtap="onSaveRecipe">保存食谱</view>
   </view>
 
-  <!-- 食材搜索选择弹窗 -->
+  <!-- 食材搜索选择弹窗（含左侧肉类分类 + 模糊搜索） -->
   <view wx:if="{{showIngPicker}}" class="modal-mask" bindtap="onClosePickers">
-    <view class="modal-sheet" catchtap="noop">
+    <view class="modal-sheet modal-sheet-tall" catchtap="noop">
       <view class="modal-header">
         <text class="modal-title">{{pickerIngIndex >= 0 ? '更换食材' : '添加食材'}}</text>
         <view class="modal-close" bindtap="onClosePickers">✕</view>
@@ -312,7 +536,7 @@
         <text>🔍</text>
         <input
           class="search-input"
-          placeholder="搜索 176 项食材..."
+          placeholder="模糊搜索 176 项食材（如 兔脊 / 鸡胸 / 三文鱼）..."
           value="{{ingPickerKeyword}}"
           bindinput="onIngPickerSearch"
         />
@@ -328,32 +552,55 @@
           {{item.icon}} {{item.name}}
         </view>
       </scroll-view>
-      <scroll-view class="modal-scroll" scroll-y="true">
-        <view
-          wx:for="{{pickerIngredients}}"
-          wx:key="id"
-          class="picker-item {{item.alreadyAdded ? 'picker-item-disabled' : ''}}"
-          data-id="{{item.id}}"
-          bindtap="onSelectPickerIngredient"
-        >
-          <text class="picker-icon">{{item.roleIcon}}</text>
-          <view class="picker-main">
-            <text class="picker-name">{{item.name}}</text>
-            <text class="muted-sm">{{item.category}} · {{item.roleLabel}}</text>
+      <view class="picker-split">
+        <scroll-view class="picker-cat-sidebar" scroll-y="true">
+          <view
+            wx:for="{{pickerCategories}}"
+            wx:key="id"
+            class="picker-cat-item {{ingPickerCategory === item.id ? 'picker-cat-item-active' : ''}}"
+            data-cat="{{item.id}}"
+            bindtap="onSelectIngPickerCategory"
+          >
+            {{item.label}}
           </view>
-          <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
-          <text wx:else class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
-        </view>
-      </scroll-view>
+        </scroll-view>
+        <scroll-view class="picker-main-scroll" scroll-y="true">
+          <view
+            wx:for="{{pickerIngredients}}"
+            wx:key="id"
+            class="picker-item {{item.alreadyAdded ? 'picker-item-disabled' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="onSelectPickerIngredient"
+          >
+            <text class="picker-icon">{{item.roleIcon}}</text>
+            <view class="picker-main">
+              <text class="picker-name">{{item.name}}</text>
+              <text class="muted-sm">{{item.category}} · {{item.roleLabel}}</text>
+            </view>
+            <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
+            <text wx:else class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
+          </view>
+          <view wx:if="{{pickerIngredients.length === 0}}" class="picker-empty">未找到匹配食材，请换个关键词试试</view>
+        </scroll-view>
+      </view>
     </view>
   </view>
 
-  <!-- 补剂选择弹窗 -->
+  <!-- 补剂选择弹窗（支持模糊搜索） -->
   <view wx:if="{{showSuppPicker}}" class="modal-mask" bindtap="onClosePickers">
     <view class="modal-sheet" catchtap="noop">
       <view class="modal-header">
         <text class="modal-title">{{pickerSuppIndex >= 0 ? '更换补剂' : '添加补剂'}}</text>
         <view class="modal-close" bindtap="onClosePickers">✕</view>
+      </view>
+      <view class="search-box">
+        <text>🔍</text>
+        <input
+          class="search-input"
+          placeholder="模糊搜索补剂（如 柠檬钙 / vb / 鱼油 / 牛磺酸）..."
+          value="{{suppPickerKeyword}}"
+          bindinput="onSuppPickerSearch"
+        />
       </view>
       <scroll-view class="modal-scroll" scroll-y="true">
         <view
@@ -370,6 +617,82 @@
           </view>
           <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
           <text wx:else class="badge badge-orange">选用</text>
+        </view>
+        <view wx:if="{{pickerSupplements.length === 0}}" class="picker-empty">未找到匹配补剂</view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- 智能文本识别弹窗 -->
+  <view wx:if="{{showSmartParser}}" class="modal-mask" bindtap="onClosePickers">
+    <view class="modal-sheet" catchtap="noop">
+      <view class="modal-header">
+        <view>
+          <text class="modal-title">✨ 智能识别食材</text>
+          <view class="muted-sm">像识别快递地址一样，粘贴食材与克重自动入方</view>
+        </view>
+        <view class="modal-close" bindtap="onClosePickers">✕</view>
+      </view>
+
+      <textarea
+        class="smart-textarea"
+        placeholder="示例：兔里脊500g兔腹肉500g 鸡心200克 猪肝50g 青口贝100g"
+        value="{{smartParseInput}}"
+        maxlength="500"
+        bindinput="onSmartParseInput"
+      />
+
+      <scroll-view wx:if="{{smartParseMatched.length > 0 || smartParseUnmatched.length > 0}}" class="smart-preview-scroll" scroll-y="true">
+        <view wx:if="{{smartParseMatched.length > 0}}" class="smart-preview-head">已识别 {{smartParseMatched.length}} 项食材：</view>
+        <view wx:for="{{smartParseMatched}}" wx:key="meatId" class="smart-match-row">
+          <text class="smart-match-name">{{item.roleIcon}} {{item.name}}</text>
+          <text class="smart-match-weight">{{item.weight}}g</text>
+        </view>
+        <view wx:if="{{smartParseUnmatched.length > 0}}" class="smart-unmatched-box">
+          未识别片段：{{smartParseUnmatched.join('、')}}
+        </view>
+      </scroll-view>
+
+      <view class="smart-actions">
+        <view class="btn-secondary smart-cancel" bindtap="onClosePickers">取消</view>
+        <view class="btn-primary smart-confirm" bindtap="onApplySmartParse">
+          完成识别并添加{{smartParseMatched.length > 0 ? ' (' + smartParseMatched.length + ')' : ''}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 全部 28 项营养详情弹窗（按标准库顺序展示） -->
+  <view wx:if="{{showFullNutrients}}" class="modal-mask" bindtap="onClosePickers">
+    <view class="modal-sheet" catchtap="noop">
+      <view class="modal-header">
+        <view>
+          <text class="modal-title">全部 28 项营养分析</text>
+          <view class="muted-sm">每 1,000 kcal ME · {{standard}} · {{lifeStageText}}</view>
+        </view>
+        <view class="modal-close" bindtap="onClosePickers">✕</view>
+      </view>
+
+      <scroll-view class="modal-scroll" scroll-y="true">
+        <view wx:if="{{liveSummary.hasMissingData}}" class="alert-info mb-16">
+          ℹ️ 含未检测项，不代表为 0（标 * 项跳过未报告食材后累加）。
+        </view>
+
+        <view wx:for="{{groupedEvaluations}}" wx:key="group" class="eval-group">
+          <view class="eval-group-title">{{item.group}}</view>
+          <view wx:for="{{item.items}}" wx:for-item="ev" wx:key="key" class="eval-row">
+            <view class="eval-left">
+              <text class="eval-name">{{ev.label}}{{ev.hasMissingSource ? ' *' : ''}}</text>
+              <text class="eval-bounds">{{ev.boundsText}}{{ev.key === 'ca_p_ratio' ? '' : ' /千卡'}}</text>
+            </view>
+            <view class="eval-right">
+              <view class="eval-val-col">
+                <text class="eval-val">{{ev.per1000kcalText}}<text wx:if="{{ev.key !== 'ca_p_ratio'}}" class="eval-per-unit">/千卡</text></text>
+                <text wx:if="{{ev.totalAmountText}}" class="eval-total-sub">{{ev.totalAmountText}}</text>
+              </view>
+              <text class="traffic-dot traffic-{{ev.status}}">{{ev.statusSymbol}}</text>
+            </view>
+          </view>
         </view>
       </scroll-view>
     </view>

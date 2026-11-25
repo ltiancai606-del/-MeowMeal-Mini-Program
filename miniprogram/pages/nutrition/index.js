@@ -80,18 +80,14 @@ Page({
   },
 
   refreshLists() {
-    const kw = (this.data.keyword || '').trim().toLowerCase();
+    const kw = (this.data.keyword || '').trim();
 
-    // 1. 食材分组列表
-    const filteredIngs = engine.INGREDIENTS_DB.filter((ing) => {
+    // 1. 食材分组列表（支持关键字模糊匹配）
+    const roleMatchedIngs = engine.INGREDIENTS_DB.filter((ing) => {
       if (this.data.activeRole !== 'all' && ing.role !== this.data.activeRole) return false;
-      if (!kw) return true;
-      return (
-        ing.name.toLowerCase().indexOf(kw) !== -1 ||
-        (ing.category || '').toLowerCase().indexOf(kw) !== -1 ||
-        (ing.source_code || '').toLowerCase().indexOf(kw) !== -1
-      );
+      return true;
     });
+    const filteredIngs = kw ? engine.searchIngredientsFuzzy(kw, roleMatchedIngs) : roleMatchedIngs;
 
     const groupMap = {};
     filteredIngs.forEach((ing) => {
@@ -122,17 +118,13 @@ Page({
       items: groupMap[cat],
     }));
 
-    // 2. 补剂列表
-    const filteredSupplements = engine.SUPPLEMENTS_DB.filter((supp) => {
+    // 2. 补剂列表（支持关键字模糊匹配）
+    const catMatchedSupps = engine.SUPPLEMENTS_DB.filter((supp) => {
       if (this.data.activeSuppCat !== 'all' && supp.type !== this.data.activeSuppCat) return false;
-      if (!kw) return true;
-      return (
-        supp.name.toLowerCase().indexOf(kw) !== -1 ||
-        (supp.category || '').toLowerCase().indexOf(kw) !== -1 ||
-        (supp.brand || '').toLowerCase().indexOf(kw) !== -1 ||
-        (supp.note || '').toLowerCase().indexOf(kw) !== -1
-      );
-    }).map((supp) => {
+      return true;
+    });
+    const matchedSupps = kw ? engine.searchSupplementsFuzzy(kw, catMatchedSupps) : catMatchedSupps;
+    const filteredSupplements = matchedSupps.map((supp) => {
       const highlights = [];
       engine.SUPP_NUTRIENT_LABELS.forEach((meta) => {
         const val = supp.nutrients[meta.key];

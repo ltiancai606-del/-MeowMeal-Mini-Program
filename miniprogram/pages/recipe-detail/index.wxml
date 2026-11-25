@@ -1,3 +1,15 @@
+<!-- 自定义顶部导航栏（支持未保存食谱返回弹窗拦截） -->
+<view class="custom-nav" style="padding-top: {{statusBarHeight}}px;">
+  <view class="custom-nav-bar" style="height: {{navBarHeight}}px;">
+    <view class="custom-nav-back" bindtap="onNavBack">
+      <view class="custom-nav-chevron"></view>
+    </view>
+    <text class="custom-nav-title">{{isEditing ? '编辑食谱' : '食谱营养详情'}}</text>
+    <view class="custom-nav-right"></view>
+  </view>
+</view>
+<view style="height: {{navTotalHeight}}px;"></view>
+
 <view class="detail-wrap" wx:if="{{recipe}}">
   <!-- 顶部总览卡片 -->
   <view class="card hero-card">
@@ -93,7 +105,10 @@
   <view class="card">
     <view class="section-header">
       <text class="section-title">🥩 食材清单 ({{ingredientRows.length}} 项)</text>
-      <text wx:if="{{isEditing}}" class="link-orange" bindtap="onOpenAddIngredient">+ 添加食材</text>
+      <view wx:if="{{isEditing}}" class="supp-header-actions">
+        <text class="smart-btn" bindtap="onOpenSmartParser">✨ 智能识别</text>
+        <text class="link-orange" bindtap="onOpenAddIngredient">+ 添加食材</text>
+      </view>
       <text wx:else class="muted-sm">生鲜可食部</text>
     </view>
 
@@ -274,8 +289,8 @@
     <block wx:else>
       <view class="bar-icon-btn" bindtap="onCopyRecipe">复制</view>
       <view class="bar-icon-btn bar-del" bindtap="onDeleteRecipe">删除</view>
-      <view class="btn-primary bar-main" bindtap="onToggleActive">
-        {{recipe.isActive ? '暂停执行该食谱' : '设为正在执行'}}
+      <view class="btn-primary bar-main {{recipe.isActive ? 'bar-stop' : ''}}" bindtap="onToggleActive">
+        {{recipe.isActive ? '停止执行' : '开始执行'}}
       </view>
     </block>
   </view>
@@ -316,16 +331,16 @@
     </view>
   </view>
 
-  <!-- 食材搜索选择弹窗（支持同类筛选 + 防重复） -->
+  <!-- 食材搜索选择弹窗（支持左侧肉类分类 + 同类筛选 + 模糊搜索 + 防重复） -->
   <view wx:if="{{showIngPicker}}" class="modal-mask" bindtap="onCloseModals">
-    <view class="modal-sheet" catchtap="noop">
+    <view class="modal-sheet modal-sheet-tall" catchtap="noop">
       <view class="modal-header">
         <text class="modal-title">{{pickerIngIndex >= 0 ? '更换食材（优先展示同类）' : '添加食材'}}</text>
         <view class="modal-close" bindtap="onCloseModals">✕</view>
       </view>
       <view class="search-box">
         <text>🔍</text>
-        <input class="search-input" placeholder="搜索 176 项食材..." value="{{ingPickerKeyword}}" bindinput="onIngPickerSearch" />
+        <input class="search-input" placeholder="支持模糊搜索，如：兔脊、猪肝、三文..." value="{{ingPickerKeyword}}" bindinput="onIngPickerSearch" />
       </view>
       <scroll-view class="role-filter-scroll" scroll-x="true" enable-flex="true">
         <view
@@ -338,32 +353,50 @@
           {{item.icon}} {{item.name}}
         </view>
       </scroll-view>
-      <scroll-view class="modal-scroll" scroll-y="true">
-        <view
-          wx:for="{{pickerIngredients}}"
-          wx:key="id"
-          class="picker-item {{item.alreadyAdded ? 'picker-item-disabled' : ''}}"
-          data-id="{{item.id}}"
-          bindtap="onSelectPickerIngredient"
-        >
-          <text class="picker-icon">{{item.roleIcon}}</text>
-          <view class="picker-main">
-            <text class="picker-name">{{item.name}}</text>
-            <text class="muted-sm">{{item.category}} · {{item.roleLabel}}</text>
+      <view class="picker-split">
+        <scroll-view class="picker-cat-sidebar" scroll-y="true">
+          <view
+            wx:for="{{pickerCategories}}"
+            wx:key="id"
+            class="picker-cat-item {{ingPickerCategory === item.id ? 'picker-cat-item-active' : ''}}"
+            data-cat="{{item.id}}"
+            bindtap="onSelectIngPickerCategory"
+          >
+            {{item.label}}
           </view>
-          <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
-          <text wx:else class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
-        </view>
-      </scroll-view>
+        </scroll-view>
+        <scroll-view class="picker-main-scroll" scroll-y="true">
+          <view
+            wx:for="{{pickerIngredients}}"
+            wx:key="id"
+            class="picker-item {{item.alreadyAdded ? 'picker-item-disabled' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="onSelectPickerIngredient"
+          >
+            <text class="picker-icon">{{item.roleIcon}}</text>
+            <view class="picker-main">
+              <text class="picker-name">{{item.name}}</text>
+              <text class="muted-sm">{{item.category}} · {{item.roleLabel}}</text>
+            </view>
+            <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
+            <text wx:else class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
+          </view>
+          <view wx:if="{{pickerIngredients.length === 0}}" class="picker-empty">未找到匹配食材，可换个关键词试试</view>
+        </scroll-view>
+      </view>
     </view>
   </view>
 
-  <!-- 补剂选择弹窗（纯中文名称 + 防重复） -->
+  <!-- 补剂选择弹窗（支持模糊搜索 + 原品牌全名 + 防重复） -->
   <view wx:if="{{showSuppPicker}}" class="modal-mask" bindtap="onCloseModals">
     <view class="modal-sheet" catchtap="noop">
       <view class="modal-header">
         <text class="modal-title">{{pickerSuppIndex >= 0 ? '更换补剂' : '添加补剂'}}</text>
         <view class="modal-close" bindtap="onCloseModals">✕</view>
+      </view>
+      <view class="search-box">
+        <text>🔍</text>
+        <input class="search-input" placeholder="模糊搜索补剂，如：柠檬钙、vb、鱼油、NOW..." value="{{suppPickerKeyword}}" bindinput="onSuppPickerSearch" />
       </view>
       <scroll-view class="modal-scroll" scroll-y="true">
         <view
@@ -381,7 +414,43 @@
           <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
           <text wx:else class="badge badge-orange">选用</text>
         </view>
+        <view wx:if="{{pickerSupplements.length === 0}}" class="picker-empty">未找到匹配补剂</view>
       </scroll-view>
+    </view>
+  </view>
+
+  <!-- 自然语言智能识别食材弹窗 -->
+  <view wx:if="{{showSmartParser}}" class="modal-mask" bindtap="onCloseModals">
+    <view class="modal-sheet" catchtap="noop">
+      <view class="modal-header">
+        <view>
+          <text class="modal-title">✨ 智能文本识别食材</text>
+          <view class="muted-sm">像快递地址一样粘贴或输入，自动提取食材与克重</view>
+        </view>
+        <view class="modal-close" bindtap="onCloseModals">✕</view>
+      </view>
+      <textarea
+        class="smart-textarea"
+        placeholder="示例：兔里脊500g兔腹肉500g，鸡心150克、三文鱼100g、猪肝50g（支持 g/克/kg/斤/两）"
+        value="{{smartParseInput}}"
+        bindinput="onSmartParseInput"
+        maxlength="600"
+      />
+      <scroll-view wx:if="{{smartParseMatched.length > 0 || smartParseUnmatched.length > 0}}" class="smart-preview-scroll" scroll-y="true">
+        <view wx:if="{{smartParseMatched.length > 0}}" class="smart-preview-head">已识别 {{smartParseMatched.length}} 项食材：</view>
+        <view wx:for="{{smartParseMatched}}" wx:key="meatId" class="smart-match-row">
+          <text class="smart-match-name">{{item.roleIcon}} {{item.name}}</text>
+          <text class="smart-match-weight">{{item.weight}} g</text>
+        </view>
+        <view wx:if="{{smartParseUnmatched.length > 0}}" class="smart-unmatched-box">
+          未识别片段：
+          <text wx:for="{{smartParseUnmatched}}" wx:key="index">{{item.rawName}}{{index < smartParseUnmatched.length - 1 ? '、' : ''}}</text>
+        </view>
+      </scroll-view>
+      <view class="smart-actions">
+        <view class="btn-secondary smart-cancel" bindtap="onCloseModals">取消</view>
+        <view class="btn-primary smart-confirm" bindtap="onApplySmartParse">完成并添加到配方</view>
+      </view>
     </view>
   </view>
 </view>

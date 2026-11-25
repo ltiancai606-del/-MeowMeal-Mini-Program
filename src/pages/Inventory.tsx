@@ -1,7 +1,7 @@
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Camera, Search, Filter, ChevronRight, X, Loader2, AlertTriangle } from 'lucide-react';
 import { MOCK_INVENTORY, MEAT_DATABASE, saveInventory } from '../data/mock';
-import { ROLE_META, getConfidenceBadgeInfo } from '../lib/nutritionEngine';
+import { ROLE_META, getConfidenceBadgeInfo, searchIngredientsFuzzy, fuzzyMatchScore } from '../lib/nutritionEngine';
 import { format, differenceInDays } from 'date-fns';
 import { cn } from '../lib/utils';
 import React, { useState, useRef, useEffect } from 'react';
@@ -24,10 +24,9 @@ function SearchableMeatSelect({ value, onChange }: { value: string; onChange: (v
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredMeats = MEAT_DATABASE.filter(m =>
-    m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMeats = searchTerm.trim()
+    ? searchIngredientsFuzzy(searchTerm, MEAT_DATABASE)
+    : MEAT_DATABASE;
 
   return (
     <div className="relative" ref={wrapperRef}>
@@ -125,11 +124,11 @@ function InventoryList() {
       case 'expired': base = expiredItems; break;
       default: base = MOCK_INVENTORY;
     }
-    const q = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim();
     if (!q) return base;
     return base.filter(item => {
       const meat = MEAT_DATABASE.find(m => m.id === item.meatId);
-      return meat && (meat.name.toLowerCase().includes(q) || meat.category.toLowerCase().includes(q));
+      return meat && fuzzyMatchScore(q, `${meat.name} ${meat.category}`) > 0;
     });
   };
 

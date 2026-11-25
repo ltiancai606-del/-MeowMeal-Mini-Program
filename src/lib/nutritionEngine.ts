@@ -230,10 +230,10 @@ function mapUnitShort(unitBasis: string): string {
 }
 
 function extractBrand(name: string): string {
-  if (name.includes('诺奥') || name.startsWith('NOW')) return '诺奥';
-  if (name.includes('维瓦') || name.startsWith('Viva')) return '维瓦';
-  if (name.includes('自然之加') || name.startsWith('NaturesPlus')) return '自然之加';
-  if (name.includes('汤普森') || name.startsWith('Thompson')) return '汤普森';
+  if (name.includes('NOW')) return 'NOW Foods';
+  if (name.includes('Viva')) return 'Viva Naturals';
+  if (name.includes('NaturesPlus')) return 'NaturesPlus';
+  if (name.includes('Thompson')) return 'Thompson';
   if (name.includes('双鲸')) return '双鲸';
   return '通用';
 }
@@ -1122,4 +1122,326 @@ export function migrateLegacySupplementId(id: string): string {
     return LEGACY_SUPP_ID_MAP[id];
   }
   return 'sup_01';
+}
+
+const SEARCH_ALIASES: Record<string, string[]> = {
+  vb: ['维生素b', '复合维b', 'b族'],
+  维b: ['维生素b', '复合维b'],
+  b族: ['维生素b', '复合维b'],
+  ve: ['维生素e', '生育酚'],
+  维e: ['维生素e'],
+  va: ['维生素a'],
+  vd: ['维生素d'],
+  诺奥: ['now', 'nowfoods'],
+  维瓦: ['viva', 'vivanaturals'],
+  自然之加: ['naturesplus'],
+  汤普森: ['thompson'],
+  青口: ['青口贝', '绿唇贻贝'],
+  贻贝: ['青口贝'],
+  三文: ['三文鱼'],
+  鲑鱼: ['三文鱼'],
+  鸡脯: ['鸡胸'],
+  鸡胸: ['鸡胸肉'],
+  猪瘦肉: ['猪里脊', '猪后腿'],
+  牛磺: ['牛磺酸'],
+  补钙: ['钙'],
+  钙粉: ['钙'],
+  鱼肝油: ['鱼油'],
+  蛋黄: ['鸡蛋黄', '鸭蛋黄'],
+};
+
+function normalizeSearchStr(str: string): string {
+  return String(str || '')
+    .toLowerCase()
+    .replace(/[\s()（）[\]【】·、,，。;；:：/\\\-_+＋'"`]/g, '');
+}
+
+function extractCoreIngredientName(name: string): string {
+  return String(name || '').split(/[（(]/)[0].trim();
+}
+
+function isOrderedSubsequence(needle: string, haystack: string): boolean {
+  if (!needle || !haystack || needle.length > haystack.length) return false;
+  let ni = 0;
+  for (let hi = 0; hi < haystack.length && ni < needle.length; hi++) {
+    if (haystack[hi] === needle[ni]) ni += 1;
+  }
+  return ni === needle.length;
+}
+
+function charOverlapRatio(needle: string, haystack: string): number {
+  if (!needle || !haystack) return 0;
+  let hits = 0;
+  for (let i = 0; i < needle.length; i++) {
+    if (haystack.includes(needle[i])) hits += 1;
+  }
+  return hits / needle.length;
+}
+
+function scoreTokenAgainstCandidate(
+  rawToken: string,
+  coreNameNorm: string,
+  primaryNorm: string,
+  combinedNorm: string
+): number {
+  const token = normalizeSearchStr(rawToken);
+  if (!token) return 100;
+
+  const variants = [token];
+  if (SEARCH_ALIASES[token]) {
+    for (const v of SEARCH_ALIASES[token]) {
+      const nv = normalizeSearchStr(v);
+      if (nv && !variants.includes(nv)) variants.push(nv);
+    }
+  }
+
+  let best = 0;
+  for (let idx = 0; idx < variants.length; idx++) {
+    const v = variants[idx];
+    if (coreNameNorm && coreNameNorm === v) {
+      best = Math.max(best, 120);
+    } else if (coreNameNorm && coreNameNorm.startsWith(v)) {
+      best = Math.max(best, 108);
+    } else if (primaryNorm && primaryNorm.includes(v)) {
+      best = Math.max(best, 96);
+    } else if (combinedNorm && combinedNorm.includes(v)) {
+      best = Math.max(best, 82);
+    } else if (v.length >= 2 && primaryNorm && isOrderedSubsequence(v, primaryNorm)) {
+      best = Math.max(best, 74);
+    } else if (v.length >= 2 && combinedNorm && isOrderedSubsequence(v, combinedNorm)) {
+      best = Math.max(best, 64);
+    } else if (idx === 0 && v.length >= 2 && primaryNorm) {
+      const ratio = charOverlapRatio(v, primaryNorm);
+      if (ratio >= 0.65) {
+        best = Math.max(best, 50 + Math.round(ratio * 15));
+      }
+    }
+  }
+  return best;
+}
+
+export function fuzzyMatchScore(query: string, primaryName: string, extraFields: string[] = []): number {
+  const raw = String(query || '').trim();
+  if (!raw) return 1;
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return 1;
+
+  const coreNorm = normalizeSearchStr(extractCoreIngredientName(primaryName));
+  const primaryNorm = normalizeSearchStr(primaryName);
+  const combinedNorm = normalizeSearchStr([primaryName, ...extraFields].join(' '));
+
+  let totalScore = 0;
+  for (const t of tokens) {
+    const score = scoreTokenAgainstCandidate(t, coreNorm, primaryNorm, combinedNorm);
+    if (score <= 0) return 0;
+    totalScore += score;
+  }
+  return Math.round(totalScore / tokens.length);
+}
+
+export function searchIngredientsFuzzy(
+  query: string,
+  list: IngredientRecord[] = INGREDIENTS_DB
+): IngredientRecord[] {
+  const raw = String(query || '').trim();
+  if (!raw) return [...list];
+
+  const scored: Array<{ ing: IngredientRecord; score: number }> = [];
+  for (const ing of list) {
+    const roleLabel = ROLE_META[ing.role]?.label || '';
+    const score = fuzzyMatchScore(raw, ing.name, [ing.category || '', roleLabel, ing.source_code || '']);
+    if (score > 0) scored.push({ ing, score });
+  }
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return (a.ing.is_proxy ? 1 : 0) - (b.ing.is_proxy ? 1 : 0);
+  });
+
+  return scored.map((s) => s.ing);
+}
+
+export function searchSupplementsFuzzy(
+  query: string,
+  list: SupplementRecord[] = SUPPLEMENTS_DB
+): SupplementRecord[] {
+  const raw = String(query || '').trim();
+  if (!raw) return [...list];
+
+  const scored: Array<{ supp: SupplementRecord; score: number }> = [];
+  for (const supp of list) {
+    const score = fuzzyMatchScore(raw, supp.name, [
+      supp.category || '',
+      supp.brand || '',
+      supp.unit_label || '',
+      supp.note || '',
+    ]);
+    if (score > 0) scored.push({ supp, score });
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map((s) => s.supp);
+}
+
+export interface ParsedNaturalIngredientItem {
+  meatId: string;
+  name: string;
+  category: string;
+  roleIcon: string;
+  roleLabel: string;
+  weight: number;
+  rawText: string;
+  isProxy: boolean;
+}
+
+export interface ParsedNaturalIngredientsResult {
+  matched: ParsedNaturalIngredientItem[];
+  unmatched: Array<{ rawName: string; weight: number }>;
+}
+
+function convertUnitToGrams(num: number, unitRaw: string, matchedIng: IngredientRecord | null): number {
+  const u = String(unitRaw || '').toLowerCase();
+  if (u === 'kg' || u === '千克' || u === '公斤') return Math.round(num * 1000);
+  if (u === '斤') return Math.round(num * 500);
+  if (u === '两') return Math.round(num * 50);
+  if (u === '个' || u === '颗' || u === '枚' || u === '只') {
+    const n = matchedIng ? matchedIng.name : '';
+    if (n.includes('鹌鹑蛋')) return Math.round(num * 10);
+    if (n.includes('蛋黄')) return Math.round(num * 18);
+    return Math.round(num * 50);
+  }
+  return Math.round(num);
+}
+
+function matchBestIngredientForFragment(rawName: string): IngredientRecord | null {
+  const cleaned = String(rawName || '')
+    .replace(/^(?:生|新鲜|鲜|去骨|大概|大约|约|加|和|与|以及|还有|再加)+/, '')
+    .replace(/(?:大概|大约|约|左右|各)+$/, '')
+    .trim();
+  const cleanedNorm = normalizeSearchStr(cleaned);
+  if (!cleanedNorm) return null;
+
+  let bestIng: IngredientRecord | null = null;
+  let bestScore = 0;
+
+  for (const ing of INGREDIENTS_DB) {
+    const coreRaw = extractCoreIngredientName(ing.name);
+    const coreNorm = normalizeSearchStr(coreRaw);
+    const slashParts = coreRaw
+      .split('/')
+      .map((p) => normalizeSearchStr(p))
+      .filter(Boolean);
+    const roleLabel = ROLE_META[ing.role]?.label || '';
+
+    let score = 0;
+    if (coreNorm === cleanedNorm) {
+      score = 200;
+    } else if (slashParts.includes(cleanedNorm)) {
+      score = 195;
+    } else if (coreNorm.startsWith(cleanedNorm)) {
+      score = 175 - Math.min(30, coreNorm.length - cleanedNorm.length);
+    } else if (coreNorm.includes(cleanedNorm)) {
+      score = 155 - Math.min(30, coreNorm.length - cleanedNorm.length);
+    } else if (cleanedNorm.includes(coreNorm) && coreNorm.length >= 2) {
+      score = 140 - Math.min(25, cleanedNorm.length - coreNorm.length);
+    } else {
+      score = fuzzyMatchScore(cleaned, ing.name, [ing.category || '', roleLabel]);
+    }
+
+    if (score > 0 && !ing.is_proxy) {
+      score += 6;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIng = ing;
+    }
+  }
+
+  return bestScore >= 60 ? bestIng : null;
+}
+
+export function parseNaturalIngredientsText(rawText: string): ParsedNaturalIngredientsResult {
+  let text = String(rawText || '').trim();
+  if (!text) return { matched: [], unmatched: [] };
+
+  text = text.replace(/[０-９Ａ-Ｚａ-ｚ]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xfee0)
+  );
+  text = text
+    .replace(/半公斤/g, '500g')
+    .replace(/一公斤/g, '1000g')
+    .replace(/半斤/g, '250g')
+    .replace(/一斤半/g, '750g')
+    .replace(/一斤/g, '500g')
+    .replace(/[二两]斤/g, '1000g');
+
+  const clauses = text
+    .split(/[\n\r,，、;；+＋]+/)
+    .map((s) => s.replace(/^\s*(?:\d+[.\)、]|[(（]\d+[)）]|[•·-])\s*/, '').trim())
+    .filter(Boolean);
+
+  const pairs: Array<{ rawName: string; num: number; unit: string }> = [];
+  const weightFirstRegex = /(\d+(?:\.\d+)?)\s*(kg|千克|公斤|g|克|斤|两|个|颗|枚|只)\s*([^\d\s,，、;；:：]+)/gi;
+  const nameFirstRegex = /([^\d\s,，、;；:：=]+?)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*(kg|千克|公斤|g|克|斤|两|个|颗|枚|只)?/gi;
+
+  for (const clause of clauses) {
+    const startsWithWeight = /^\s*\d+(?:\.\d+)?\s*(?:kg|千克|公斤|g|克|斤|两|个|颗|枚|只)/i.test(clause);
+    let m: RegExpExecArray | null;
+    if (startsWithWeight) {
+      weightFirstRegex.lastIndex = 0;
+      while ((m = weightFirstRegex.exec(clause)) !== null) {
+        pairs.push({ rawName: m[3].trim(), num: parseFloat(m[1]), unit: m[2] || 'g' });
+      }
+    } else {
+      nameFirstRegex.lastIndex = 0;
+      let foundInClause = false;
+      while ((m = nameFirstRegex.exec(clause)) !== null) {
+        const nm = m[1].trim();
+        const num = parseFloat(m[2]);
+        if (nm && !isNaN(num) && num > 0) {
+          pairs.push({ rawName: nm, num, unit: m[3] || 'g' });
+          foundInClause = true;
+        }
+      }
+      if (!foundInClause && clause.length >= 2) {
+        pairs.push({ rawName: clause, num: 0, unit: 'g' });
+      }
+    }
+  }
+
+  const mergedMap: Record<string, ParsedNaturalIngredientItem> = {};
+  const matchedOrder: ParsedNaturalIngredientItem[] = [];
+  const unmatched: Array<{ rawName: string; weight: number }> = [];
+
+  for (const p of pairs) {
+    const ing = matchBestIngredientForFragment(p.rawName);
+    if (!ing) {
+      unmatched.push({
+        rawName: p.rawName,
+        weight: p.num > 0 ? convertUnitToGrams(p.num, p.unit, null) : 0,
+      });
+      continue;
+    }
+    const weightG = p.num > 0 ? convertUnitToGrams(p.num, p.unit, ing) : 0;
+    if (mergedMap[ing.id]) {
+      mergedMap[ing.id].weight += weightG;
+    } else {
+      const roleMeta = ROLE_META[ing.role] || { label: '肉类', icon: '🥩' };
+      const entry: ParsedNaturalIngredientItem = {
+        meatId: ing.id,
+        name: ing.name,
+        category: ing.category,
+        roleIcon: roleMeta.icon,
+        roleLabel: roleMeta.label,
+        weight: weightG,
+        rawText: p.rawName,
+        isProxy: Boolean(ing.is_proxy),
+      };
+      mergedMap[ing.id] = entry;
+      matchedOrder.push(entry);
+    }
+  }
+
+  return { matched: matchedOrder, unmatched };
 }

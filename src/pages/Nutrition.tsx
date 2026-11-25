@@ -8,6 +8,8 @@ import {
   IngredientNutrients,
   formatIngredientNutrientValue,
   getConfidenceBadgeInfo,
+  searchIngredientsFuzzy,
+  searchSupplementsFuzzy,
 } from '../lib/nutritionEngine';
 
 const INGREDIENT_DETAIL_FIELDS: Array<{
@@ -297,17 +299,12 @@ export default function Nutrition() {
     { id: 'taurine', name: '牛磺酸', icon: '🐂' },
   ];
 
-  const q = searchQuery.trim().toLowerCase();
+  const q = searchQuery.trim();
 
-  const filteredMeats = MEAT_DATABASE.filter(meat => {
-    const matchesSearch =
-      !q ||
-      meat.name.toLowerCase().includes(q) ||
-      meat.category.toLowerCase().includes(q) ||
-      (meat.source_code && meat.source_code.toLowerCase().includes(q));
-    const matchesCategory = activeCategory === 'all' || meat.role === activeCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const roleFilteredMeats = MEAT_DATABASE.filter(
+    meat => activeCategory === 'all' || meat.role === activeCategory
+  );
+  const filteredMeats = q ? searchIngredientsFuzzy(q, roleFilteredMeats) : roleFilteredMeats;
 
   const groupedMeats = filteredMeats.reduce((acc, meat) => {
     const group = meat.category || '其他';
@@ -348,15 +345,10 @@ export default function Nutrition() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [activeTab, sortedGroups]);
 
-  const filteredSupps = SUPPLEMENTS.filter(supp => {
-    const matchesSearch =
-      !q ||
-      supp.name.toLowerCase().includes(q) ||
-      supp.category.toLowerCase().includes(q) ||
-      supp.brand.toLowerCase().includes(q);
-    const matchesCategory = activeSuppCategory === 'all' || supp.type === activeSuppCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const catFilteredSupps = SUPPLEMENTS.filter(
+    supp => activeSuppCategory === 'all' || supp.type === activeSuppCategory
+  );
+  const filteredSupps = q ? searchSupplementsFuzzy(q, catFilteredSupps) : catFilteredSupps;
 
   const scrollToGroup = (groupName: string) => {
     setActiveSidebarGroup(groupName);
@@ -387,7 +379,7 @@ export default function Nutrition() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
           <input
             type="text"
-            placeholder={activeTab === 'ingredients' ? '搜索 176 项食材名称、动物分类...' : '搜索 10 款补剂名称或品牌...'}
+            placeholder={activeTab === 'ingredients' ? '模糊搜索 176 项食材（如 兔脊 / 鸡胸 / 三文鱼）...' : '模糊搜索 10 款补剂（如 柠檬钙 / vb / 鱼油）...'}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full pl-11 pr-4 py-3 bg-white border border-stone-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-[#FF7B4A]/20 shadow-sm"

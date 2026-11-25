@@ -2,7 +2,7 @@
 module.exports = [
   {
     "id": "sup_01",
-    "name": "柠檬酸钙粉（诺奥）",
+    "name": "柠檬酸钙粉（NOW Foods）",
     "category": "钙粉",
     "unit_basis": "g",
     "unit_label": "每1g",
@@ -31,7 +31,7 @@ module.exports = [
   },
   {
     "id": "sup_02",
-    "name": "碳酸钙粉（诺奥）",
+    "name": "碳酸钙粉（NOW Foods）",
     "category": "钙粉",
     "unit_basis": "g",
     "unit_label": "每1g",
@@ -60,7 +60,7 @@ module.exports = [
   },
   {
     "id": "sup_03",
-    "name": "高浓缩鱼油（诺奥 750mg）",
+    "name": "高浓缩鱼油（NOW Foods 750mg）",
     "category": "鱼油",
     "unit_basis": "capsule",
     "unit_label": "每1粒",
@@ -91,7 +91,7 @@ module.exports = [
   },
   {
     "id": "sup_04",
-    "name": "三倍浓缩鱼油（维瓦 1035mg）",
+    "name": "三倍浓缩鱼油（Viva Naturals 1035mg）",
     "category": "鱼油",
     "unit_basis": "capsule",
     "unit_label": "每1粒",
@@ -122,7 +122,7 @@ module.exports = [
   },
   {
     "id": "sup_05",
-    "name": "碘化钾片（诺奥 225μg）",
+    "name": "碘化钾片（NOW Foods 225μg）",
     "category": "碘/钾",
     "unit_basis": "tablet",
     "unit_label": "每1片",
@@ -151,7 +151,7 @@ module.exports = [
   },
   {
     "id": "sup_06",
-    "name": "米糠复合维生素B（自然之加 90片版）",
+    "name": "米糠复合维生素B（NaturesPlus 90片版）",
     "category": "复合维B",
     "unit_basis": "tablet",
     "unit_label": "每1片",
@@ -180,7 +180,7 @@ module.exports = [
   },
   {
     "id": "sup_07",
-    "name": "米糠复合维生素B（汤普森）",
+    "name": "米糠复合维生素B（Thompson）",
     "category": "复合维B",
     "unit_basis": "tablet",
     "unit_label": "每1片",
@@ -209,7 +209,7 @@ module.exports = [
   },
   {
     "id": "sup_08",
-    "name": "双鲸维生素E软胶囊（100mg）",
+    "name": "维生素E软胶囊（双鲸 100mg）",
     "category": "维生素E",
     "unit_basis": "capsule",
     "unit_label": "每1粒",
@@ -238,7 +238,7 @@ module.exports = [
   },
   {
     "id": "sup_09",
-    "name": "牛磺酸胶囊（诺奥 1000mg）",
+    "name": "牛磺酸胶囊（NOW Foods 1000mg）",
     "category": "牛磺酸",
     "unit_basis": "capsule",
     "unit_label": "每1粒",
@@ -267,7 +267,7 @@ module.exports = [
   },
   {
     "id": "sup_10",
-    "name": "牛磺酸胶囊（诺奥 500mg）",
+    "name": "牛磺酸胶囊（NOW Foods 500mg）",
     "category": "牛磺酸",
     "unit_basis": "capsule",
     "unit_label": "每1粒",

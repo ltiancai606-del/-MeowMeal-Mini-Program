@@ -19,6 +19,9 @@ const FALLBACK_COLORS = ['#FF7B4A', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', 
 
 Page({
   data: {
+    statusBarHeight: 20,
+    navBarHeight: 44,
+    navTotalHeight: 64,
     recipeId: '',
     recipe: null,
     standard: 'NRC',
@@ -64,14 +67,92 @@ Page({
     pickerIngIndex: -1,
     ingPickerKeyword: '',
     ingPickerRole: 'all',
+    ingPickerCategory: 'all',
+    pickerCategories: [],
     preferredReplaceRole: '',
     pickerIngredients: [],
     showSuppPicker: false,
     pickerSuppIndex: -1,
+    suppPickerKeyword: '',
     pickerSupplements: [],
+    // 智能文本识别弹窗
+    showSmartParser: false,
+    smartParseInput: '',
+    smartParseMatched: [],
+    smartParseUnmatched: [],
+  },
+
+  onUnload() {
+    if (this._execReturnTimer) {
+      clearTimeout(this._execReturnTimer);
+      this._execReturnTimer = null;
+    }
+    this.setUnsavedGuard(false);
+  },
+
+  setUnsavedGuard(enabled) {
+    if (enabled) {
+      if (wx.enableAlertBeforeUnload) {
+        wx.enableAlertBeforeUnload({ message: '未保存食谱，确认返回？' });
+      }
+    } else if (wx.disableAlertBeforeUnload) {
+      wx.disableAlertBeforeUnload();
+    }
+  },
+
+  initNavBarMetrics() {
+    let statusBarHeight = 20;
+    let navBarHeight = 44;
+    try {
+      const winInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      if (winInfo && winInfo.statusBarHeight) {
+        statusBarHeight = winInfo.statusBarHeight;
+      }
+      if (wx.getMenuButtonBoundingClientRect) {
+        const menu = wx.getMenuButtonBoundingClientRect();
+        if (menu && menu.height && menu.top >= statusBarHeight) {
+          navBarHeight = (menu.top - statusBarHeight) * 2 + menu.height;
+        }
+      }
+    } catch (e) {}
+    this.setData({
+      statusBarHeight,
+      navBarHeight,
+      navTotalHeight: statusBarHeight + navBarHeight,
+    });
+  },
+
+  onNavBack() {
+    const goBack = () => {
+      this.setUnsavedGuard(false);
+      wx.navigateBack({
+        fail: () => {
+          wx.switchTab({ url: '/pages/recipes/index' });
+        },
+      });
+    };
+
+    if (this.data.isEditing) {
+      wx.showModal({
+        title: '未保存食谱',
+        content: '未保存食谱，确认返回？',
+        confirmText: '确认返回',
+        cancelText: '继续编辑',
+        confirmColor: '#EF4444',
+        success: (res) => {
+          if (res.confirm) {
+            this.setData({ isEditing: false });
+            goBack();
+          }
+        },
+      });
+      return;
+    }
+    goBack();
   },
 
   onLoad(options) {
+    this.initNavBarMetrics();
     const id = options && options.id ? options.id : '';
     this.setData({ recipeId: id }, () => {
       this.loadRecipe();
@@ -275,15 +356,40 @@ Page({
 
   onToggleEdit() {
     if (this.data.isEditing) {
-      this.setData(
-        {
-          isEditing: false,
-          draftIngredients: JSON.parse(JSON.stringify(this.data.recipe.ingredients || [])),
-          draftSupplements: JSON.parse(JSON.stringify(this.data.recipe.supplements || [])),
-        },
-        () => this.recomputeView()
-      );
+      const origIngs = JSON.stringify(this.data.recipe.ingredients || []);
+      const origSupps = JSON.stringify(this.data.recipe.supplements || []);
+      const curIngs = JSON.stringify(this.data.draftIngredients || []);
+      const curSupps = JSON.stringify(this.data.draftSupplements || []);
+      const hasChanges = origIngs !== curIngs || origSupps !== curSupps;
+
+      const exitEdit = () => {
+        this.setUnsavedGuard(false);
+        this.setData(
+          {
+            isEditing: false,
+            draftIngredients: JSON.parse(JSON.stringify(this.data.recipe.ingredients || [])),
+            draftSupplements: JSON.parse(JSON.stringify(this.data.recipe.supplements || [])),
+          },
+          () => this.recomputeView()
+        );
+      };
+
+      if (hasChanges) {
+        wx.showModal({
+          title: '未保存食谱',
+          content: '未保存食谱，确认放弃修改并返回吗？',
+          confirmText: '确认返回',
+          cancelText: '继续编辑',
+          confirmColor: '#EF4444',
+          success: (res) => {
+            if (res.confirm) exitEdit();
+          },
+        });
+      } else {
+        exitEdit();
+      }
     } else {
+      this.setUnsavedGuard(true);
       this.setData(
         {
           isEditing: true,
@@ -302,6 +408,7 @@ Page({
       wx.showToast({ title: '请至少保留一项食材', icon: 'none' });
       return;
     }
+    this.setUnsavedGuard(false);
     this.setData({ isEditing: false });
     this.persistRecipePatch({
       ingredients: cleanIngs,
@@ -344,6 +451,7 @@ Page({
         pickerIngIndex: -1,
         ingPickerKeyword: '',
         ingPickerRole: 'all',
+        ingPickerCategory: 'all',
         preferredReplaceRole: '',
       },
       () => {
@@ -363,6 +471,7 @@ Page({
         pickerIngIndex: index,
         ingPickerKeyword: '',
         ingPickerRole: role,
+        ingPickerCategory: 'all',
         preferredReplaceRole: role,
       },
       () => {
@@ -373,7 +482,12 @@ Page({
 
   onSelectIngPickerRole(e) {
     const role = e.currentTarget.dataset.role || 'all';
-    this.setData({ ingPickerRole: role }, () => this.refreshIngPicker());
+    this.setData({ ingPickerRole: role, ingPickerCategory: 'all' }, () => this.refreshIngPicker());
+  },
+
+  onSelectIngPickerCategory(e) {
+    const cat = e.currentTarget.dataset.cat || 'all';
+    this.setData({ ingPickerCategory: cat }, () => this.refreshIngPicker());
   },
 
   onIngPickerSearch(e) {
@@ -381,8 +495,9 @@ Page({
   },
 
   refreshIngPicker() {
-    const kw = (this.data.ingPickerKeyword || '').trim().toLowerCase();
+    const kw = (this.data.ingPickerKeyword || '').trim();
     const roleFilter = this.data.ingPickerRole || 'all';
+    const catFilter = this.data.ingPickerCategory || 'all';
     const preferredRole = this.data.preferredReplaceRole || '';
     const replaceIdx = this.data.pickerIngIndex;
 
@@ -391,28 +506,56 @@ Page({
       if (idx !== replaceIdx) existingIds[item.meatId] = true;
     });
 
-    const filtered = engine.INGREDIENTS_DB.filter((ing) => {
+    const roleMatched = engine.INGREDIENTS_DB.filter((ing) => {
       if (roleFilter !== 'all' && ing.role !== roleFilter) return false;
-      if (!kw) return true;
-      return (
-        ing.name.toLowerCase().indexOf(kw) !== -1 ||
-        (ing.category || '').toLowerCase().indexOf(kw) !== -1
-      );
+      return true;
     });
 
-    filtered.sort((a, b) => {
-      if (preferredRole) {
-        const aSame = a.role === preferredRole ? 0 : 1;
-        const bSame = b.role === preferredRole ? 0 : 1;
-        if (aSame !== bSame) return aSame - bSame;
-      }
-      const aUsed = existingIds[a.id] ? 1 : 0;
-      const bUsed = existingIds[b.id] ? 1 : 0;
-      if (aUsed !== bUsed) return aUsed - bUsed;
-      const aProxy = a.is_proxy ? 1 : 0;
-      const bProxy = b.is_proxy ? 1 : 0;
-      return aProxy - bProxy;
+    const searched = kw ? engine.searchIngredientsFuzzy(kw, roleMatched) : roleMatched.slice();
+
+    // 构建左侧肉类分类侧边栏（猪肉、牛肉、鸡、鸭、兔等）
+    const catCountMap = {};
+    searched.forEach((ing) => {
+      const c = ing.category || '其他';
+      catCountMap[c] = (catCountMap[c] || 0) + 1;
     });
+    const orderedCats = engine.CATEGORY_ORDER.filter((c) => catCountMap[c] > 0);
+    Object.keys(catCountMap).forEach((c) => {
+      if (orderedCats.indexOf(c) === -1) orderedCats.push(c);
+    });
+    const pickerCategories = [{ id: 'all', label: '全部' }].concat(
+      orderedCats.map((c) => ({
+        id: c,
+        label: engine.getCategoryShortLabel(c),
+      }))
+    );
+
+    const effectiveCat = catFilter !== 'all' && !catCountMap[catFilter] ? 'all' : catFilter;
+    const filtered = searched.filter((ing) => {
+      if (effectiveCat !== 'all' && (ing.category || '其他') !== effectiveCat) return false;
+      return true;
+    });
+
+    if (!kw) {
+      filtered.sort((a, b) => {
+        if (preferredRole) {
+          const aSame = a.role === preferredRole ? 0 : 1;
+          const bSame = b.role === preferredRole ? 0 : 1;
+          if (aSame !== bSame) return aSame - bSame;
+        }
+        const aUsed = existingIds[a.id] ? 1 : 0;
+        const bUsed = existingIds[b.id] ? 1 : 0;
+        if (aUsed !== bUsed) return aUsed - bUsed;
+        const aCatIdx = engine.CATEGORY_ORDER.indexOf(a.category);
+        const bCatIdx = engine.CATEGORY_ORDER.indexOf(b.category);
+        const ca = aCatIdx !== -1 ? aCatIdx : 99;
+        const cb = bCatIdx !== -1 ? bCatIdx : 99;
+        if (ca !== cb) return ca - cb;
+        const aProxy = a.is_proxy ? 1 : 0;
+        const bProxy = b.is_proxy ? 1 : 0;
+        return aProxy - bProxy;
+      });
+    }
 
     const list = filtered.map((ing) => {
       const roleMeta = engine.ROLE_META[ing.role] || { label: ing.role, icon: '🥩' };
@@ -428,7 +571,11 @@ Page({
         alreadyAdded: Boolean(existingIds[ing.id]),
       };
     });
-    this.setData({ pickerIngredients: list });
+    this.setData({
+      pickerCategories,
+      ingPickerCategory: effectiveCat,
+      pickerIngredients: list,
+    });
   },
 
   onSelectPickerIngredient(e) {
@@ -481,27 +628,100 @@ Page({
   },
 
   refreshSuppPicker(replaceIdx) {
+    const kw = (this.data.suppPickerKeyword || '').trim();
     const existingIds = {};
     this.data.draftSupplements.forEach((s, idx) => {
       if (idx !== replaceIdx) existingIds[s.supplementId] = true;
     });
-    const pickerSupplements = engine.SUPPLEMENTS_DB.map((s) =>
+    const matched = kw
+      ? engine.searchSupplementsFuzzy(kw, engine.SUPPLEMENTS_DB)
+      : engine.SUPPLEMENTS_DB;
+    const pickerSupplements = matched.map((s) =>
       Object.assign({}, s, { alreadyAdded: Boolean(existingIds[s.id]) })
     );
     this.setData({ pickerSupplements });
   },
 
+  onSuppPickerSearch(e) {
+    this.setData({ suppPickerKeyword: e.detail.value || '' }, () => {
+      this.refreshSuppPicker(this.data.pickerSuppIndex);
+    });
+  },
+
   onOpenAddSupplement() {
-    this.setData({ showSuppPicker: true, pickerSuppIndex: -1 }, () => {
+    this.setData({ showSuppPicker: true, pickerSuppIndex: -1, suppPickerKeyword: '' }, () => {
       this.refreshSuppPicker(-1);
     });
   },
 
   onOpenReplaceSupplement(e) {
     const index = Number(e.currentTarget.dataset.index);
-    this.setData({ showSuppPicker: true, pickerSuppIndex: index }, () => {
+    this.setData({ showSuppPicker: true, pickerSuppIndex: index, suppPickerKeyword: '' }, () => {
       this.refreshSuppPicker(index);
     });
+  },
+
+  // 智能文本识别添加食材
+  onOpenSmartParser() {
+    this.setData({
+      showSmartParser: true,
+      smartParseInput: '',
+      smartParseMatched: [],
+      smartParseUnmatched: [],
+    });
+  },
+
+  onSmartParseInput(e) {
+    const val = e.detail.value || '';
+    const parsed = engine.parseNaturalIngredientsText(val);
+    this.setData({
+      smartParseInput: val,
+      smartParseMatched: parsed.matched,
+      smartParseUnmatched: parsed.unmatched,
+    });
+  },
+
+  onApplySmartParse() {
+    const parsed = engine.parseNaturalIngredientsText(this.data.smartParseInput);
+    if (parsed.matched.length === 0) {
+      wx.showToast({ title: '未识别到有效食材，请检查输入格式', icon: 'none' });
+      return;
+    }
+
+    const next = this.data.draftIngredients.slice();
+    let addedCount = 0;
+    let updatedCount = 0;
+    parsed.matched.forEach((item) => {
+      const idx = next.findIndex((x) => x.meatId === item.meatId);
+      if (idx !== -1) {
+        const curW = Number(next[idx].weight) || 0;
+        next[idx] = Object.assign({}, next[idx], { weight: item.weight > 0 ? item.weight : curW });
+        updatedCount += 1;
+      } else {
+        next.push({ meatId: item.meatId, weight: item.weight });
+        addedCount += 1;
+      }
+    });
+
+    this.setData(
+      {
+        draftIngredients: next,
+        showSmartParser: false,
+        smartParseInput: '',
+        smartParseMatched: [],
+        smartParseUnmatched: [],
+      },
+      () => {
+        this.recomputeView();
+        const msg =
+          updatedCount > 0 && addedCount > 0
+            ? `已新增 ${addedCount} 项、更新 ${updatedCount} 项`
+            : updatedCount > 0
+            ? `已更新 ${updatedCount} 项食材重量`
+            : `已识别并添加 ${addedCount} 项食材`;
+        wx.showToast({ title: msg, icon: 'success' });
+      }
+    );
   },
 
   onSelectPickerSupplement(e) {
@@ -542,6 +762,11 @@ Page({
 
   // 底部执行、复制、删除操作
   onToggleActive() {
+    if (this._execReturnTimer) {
+      clearTimeout(this._execReturnTimer);
+      this._execReturnTimer = null;
+    }
+
     const isNowActive = !this.data.recipe.isActive;
     const all = storage.getRecipes();
     const now = new Date();
@@ -558,7 +783,16 @@ Page({
     });
     storage.saveRecipes(next);
     this.loadRecipe();
-    wx.showToast({ title: isNowActive ? '已开始执行' : '已暂停执行', icon: 'success' });
+
+    if (isNowActive) {
+      wx.showToast({ title: '已开始执行，3秒后返回食谱页', icon: 'none', duration: 2500 });
+      this._execReturnTimer = setTimeout(() => {
+        this._execReturnTimer = null;
+        wx.switchTab({ url: '/pages/recipes/index' });
+      }, 3000);
+    } else {
+      wx.showToast({ title: '已停止执行', icon: 'none' });
+    }
   },
 
   onCopyRecipe() {
@@ -600,6 +834,7 @@ Page({
       showFullNutrients: false,
       showIngPicker: false,
       showSuppPicker: false,
+      showSmartParser: false,
     });
   },
 

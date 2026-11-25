@@ -28,6 +28,10 @@ Page({
     formExpiryDate: '',
     selectedIngMeta: { icon: '🍗', name: '', isProxy: false },
     ingPickerKeyword: '',
+    ingPickerRole: 'all',
+    ingPickerCategory: 'all',
+    roleFilterTabs: engine.ROLE_FILTER_TABS,
+    pickerCategories: [],
     pickerIngredients: [],
   },
 
@@ -99,10 +103,7 @@ Page({
       if (this.data.activeFilter === 'expired' && item.status !== 'expired') return false;
       if (this.data.activeFilter === 'low' && !item.isLow) return false;
       if (!kw) return true;
-      return (
-        item.name.toLowerCase().indexOf(kw) !== -1 ||
-        item.category.toLowerCase().indexOf(kw) !== -1
-      );
+      return engine.fuzzyMatchScore(kw, `${item.name} ${item.category}`) > 0;
     });
 
     const statusTabs = [
@@ -184,13 +185,30 @@ Page({
   },
 
   onOpenIngPicker() {
-    this.setData({ showIngPicker: true, ingPickerKeyword: '' }, () => {
-      this.refreshPickerIngredients();
-    });
+    this.setData(
+      { showIngPicker: true, ingPickerKeyword: '', ingPickerRole: 'all', ingPickerCategory: 'all' },
+      () => {
+        this.refreshPickerIngredients();
+      }
+    );
   },
 
   onCloseIngPicker() {
     this.setData({ showIngPicker: false });
+  },
+
+  onSelectIngPickerRole(e) {
+    const role = e.currentTarget.dataset.role || 'all';
+    this.setData({ ingPickerRole: role, ingPickerCategory: 'all' }, () => {
+      this.refreshPickerIngredients();
+    });
+  },
+
+  onSelectIngPickerCategory(e) {
+    const cat = e.currentTarget.dataset.cat || 'all';
+    this.setData({ ingPickerCategory: cat }, () => {
+      this.refreshPickerIngredients();
+    });
   },
 
   onIngPickerSearch(e) {
@@ -200,14 +218,40 @@ Page({
   },
 
   refreshPickerIngredients() {
-    const kw = (this.data.ingPickerKeyword || '').trim().toLowerCase();
-    const list = engine.INGREDIENTS_DB.filter((ing) => {
-      if (!kw) return true;
-      return (
-        ing.name.toLowerCase().indexOf(kw) !== -1 ||
-        (ing.category || '').toLowerCase().indexOf(kw) !== -1
-      );
-    }).slice(0, 60).map((ing) => {
+    const kw = (this.data.ingPickerKeyword || '').trim();
+    const roleFilter = this.data.ingPickerRole || 'all';
+    const catFilter = this.data.ingPickerCategory || 'all';
+
+    const roleMatched = engine.INGREDIENTS_DB.filter((ing) => {
+      if (roleFilter !== 'all' && ing.role !== roleFilter) return false;
+      return true;
+    });
+
+    const searched = kw ? engine.searchIngredientsFuzzy(kw, roleMatched) : roleMatched.slice();
+
+    const catCountMap = {};
+    searched.forEach((ing) => {
+      const c = ing.category || '其他';
+      catCountMap[c] = (catCountMap[c] || 0) + 1;
+    });
+    const orderedCats = engine.CATEGORY_ORDER.filter((c) => catCountMap[c] > 0);
+    Object.keys(catCountMap).forEach((c) => {
+      if (orderedCats.indexOf(c) === -1) orderedCats.push(c);
+    });
+    const pickerCategories = [{ id: 'all', label: '全部' }].concat(
+      orderedCats.map((c) => ({
+        id: c,
+        label: engine.getCategoryShortLabel(c),
+      }))
+    );
+
+    const effectiveCat = catFilter !== 'all' && !catCountMap[catFilter] ? 'all' : catFilter;
+    const filtered = searched.filter((ing) => {
+      if (effectiveCat !== 'all' && (ing.category || '其他') !== effectiveCat) return false;
+      return true;
+    });
+
+    const list = filtered.map((ing) => {
       const roleMeta = engine.ROLE_META[ing.role] || { label: ing.role, icon: '🥩' };
       const badge = engine.getConfidenceBadgeInfo(ing);
       return {
@@ -220,7 +264,11 @@ Page({
         badgeLabel: badge.shortLabel,
       };
     });
-    this.setData({ pickerIngredients: list });
+    this.setData({
+      pickerCategories,
+      ingPickerCategory: effectiveCat,
+      pickerIngredients: list,
+    });
   },
 
   onPickIngredient(e) {

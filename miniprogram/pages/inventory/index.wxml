@@ -145,9 +145,9 @@
     </view>
   </view>
 
-  <!-- 176 项食材搜索选择器 -->
+  <!-- 176 项食材搜索选择器（含左侧肉类分类 + 模糊搜索） -->
   <view wx:if="{{showIngPicker}}" class="modal-mask picker-mask" bindtap="onCloseIngPicker">
-    <view class="modal-sheet" catchtap="noop">
+    <view class="modal-sheet modal-sheet-tall" catchtap="noop">
       <view class="modal-header">
         <text class="modal-title">选择入库食材</text>
         <view class="modal-close" bindtap="onCloseIngPicker">✕</view>
@@ -156,27 +156,52 @@
         <text class="search-icon">🔍</text>
         <input
           class="search-input"
-          placeholder="搜索鸡胸、牛肉、青口贝、鸡肝..."
+          placeholder="模糊搜索鸡胸、兔脊、牛肉、青口贝、鸡肝..."
           value="{{ingPickerKeyword}}"
           bindinput="onIngPickerSearch"
         />
       </view>
-      <scroll-view class="modal-scroll" scroll-y="true">
+      <scroll-view class="role-filter-scroll" scroll-x="true" enable-flex="true">
         <view
-          wx:for="{{pickerIngredients}}"
+          wx:for="{{roleFilterTabs}}"
           wx:key="id"
-          class="picker-row {{item.id === formMeatId ? 'picker-row-active' : ''}}"
-          data-id="{{item.id}}"
-          bindtap="onPickIngredient"
+          class="role-filter-chip {{ingPickerRole === item.id ? 'role-filter-chip-active' : ''}}"
+          data-role="{{item.id}}"
+          bindtap="onSelectIngPickerRole"
         >
-          <text class="picker-row-icon">{{item.roleIcon}}</text>
-          <view class="picker-row-main">
-            <text class="picker-row-name">{{item.name}}</text>
-            <text class="muted-sm">{{item.category}} · {{item.roleLabel}}</text>
-          </view>
-          <text class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
+          {{item.icon}} {{item.name}}
         </view>
       </scroll-view>
+      <view class="picker-split">
+        <scroll-view class="picker-cat-sidebar" scroll-y="true">
+          <view
+            wx:for="{{pickerCategories}}"
+            wx:key="id"
+            class="picker-cat-item {{ingPickerCategory === item.id ? 'picker-cat-item-active' : ''}}"
+            data-cat="{{item.id}}"
+            bindtap="onSelectIngPickerCategory"
+          >
+            {{item.label}}
+          </view>
+        </scroll-view>
+        <scroll-view class="picker-main-scroll" scroll-y="true">
+          <view
+            wx:for="{{pickerIngredients}}"
+            wx:key="id"
+            class="picker-row {{item.id === formMeatId ? 'picker-row-active' : ''}}"
+            data-id="{{item.id}}"
+            bindtap="onPickIngredient"
+          >
+            <text class="picker-row-icon">{{item.roleIcon}}</text>
+            <view class="picker-row-main">
+              <text class="picker-row-name">{{item.name}}</text>
+              <text class="muted-sm">{{item.category}} · {{item.roleLabel}}</text>
+            </view>
+            <text class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
+          </view>
+          <view wx:if="{{pickerIngredients.length === 0}}" class="picker-empty">未找到匹配食材，请换个关键词试试</view>
+        </scroll-view>
+      </view>
     </view>
   </view>
 </view>

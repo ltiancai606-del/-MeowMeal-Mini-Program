@@ -32,10 +32,10 @@ function mapUnitShort(unitBasis) {
 }
 
 function extractBrand(name) {
-  if (name.indexOf('诺奥') !== -1 || name.indexOf('NOW') === 0) return '诺奥';
-  if (name.indexOf('维瓦') !== -1 || name.indexOf('Viva') === 0) return '维瓦';
-  if (name.indexOf('自然之加') !== -1 || name.indexOf('NaturesPlus') === 0) return '自然之加';
-  if (name.indexOf('汤普森') !== -1 || name.indexOf('Thompson') === 0) return '汤普森';
+  if (name.indexOf('NOW') !== -1) return 'NOW Foods';
+  if (name.indexOf('Viva') !== -1) return 'Viva Naturals';
+  if (name.indexOf('NaturesPlus') !== -1) return 'NaturesPlus';
+  if (name.indexOf('Thompson') !== -1) return 'Thompson';
   if (name.indexOf('双鲸') !== -1) return '双鲸';
   return '通用';
 }
@@ -774,6 +774,327 @@ function daysBetweenToday(dateStr) {
   return Math.floor((targetStart - todayStart) / (24 * 60 * 60 * 1000));
 }
 
+const CATEGORY_SHORT_LABELS = {
+  特种禽肉: '特种',
+  鱼类与海鲜: '海鲜',
+  调脂油脂: '油脂',
+};
+
+function getCategoryShortLabel(category) {
+  return CATEGORY_SHORT_LABELS[category] || category;
+}
+
+const SEARCH_ALIASES = {
+  vb: ['维生素b', '复合维b', 'b族'],
+  维b: ['维生素b', '复合维b'],
+  b族: ['维生素b', '复合维b'],
+  ve: ['维生素e', '生育酚'],
+  维e: ['维生素e'],
+  va: ['维生素a'],
+  vd: ['维生素d'],
+  诺奥: ['now', 'nowfoods'],
+  维瓦: ['viva', 'vivanaturals'],
+  自然之加: ['naturesplus'],
+  汤普森: ['thompson'],
+  青口: ['青口贝', '绿唇贻贝'],
+  贻贝: ['青口贝'],
+  三文: ['三文鱼'],
+  鲑鱼: ['三文鱼'],
+  鸡脯: ['鸡胸'],
+  鸡胸: ['鸡胸肉'],
+  猪瘦肉: ['猪里脊', '猪后腿'],
+  牛磺: ['牛磺酸'],
+  补钙: ['钙'],
+  钙粉: ['钙'],
+  鱼肝油: ['鱼油'],
+  蛋黄: ['鸡蛋黄', '鸭蛋黄'],
+};
+
+function normalizeSearchStr(str) {
+  return String(str || '')
+    .toLowerCase()
+    .replace(/[\s()（）[\]【】·、,，。;；:：/\\\-_+＋'"`]/g, '');
+}
+
+function extractCoreIngredientName(name) {
+  return String(name || '').split(/[（(]/)[0].trim();
+}
+
+function isOrderedSubsequence(needle, haystack) {
+  if (!needle || !haystack || needle.length > haystack.length) return false;
+  let ni = 0;
+  for (let hi = 0; hi < haystack.length && ni < needle.length; hi++) {
+    if (haystack[hi] === needle[ni]) ni += 1;
+  }
+  return ni === needle.length;
+}
+
+function charOverlapRatio(needle, haystack) {
+  if (!needle || !haystack) return 0;
+  let hits = 0;
+  for (let i = 0; i < needle.length; i++) {
+    if (haystack.indexOf(needle[i]) !== -1) hits += 1;
+  }
+  return hits / needle.length;
+}
+
+function scoreTokenAgainstCandidate(rawToken, coreNameNorm, primaryNorm, combinedNorm) {
+  const token = normalizeSearchStr(rawToken);
+  if (!token) return 100;
+
+  const variants = [token];
+  if (SEARCH_ALIASES[token]) {
+    SEARCH_ALIASES[token].forEach((v) => {
+      const nv = normalizeSearchStr(v);
+      if (nv && variants.indexOf(nv) === -1) variants.push(nv);
+    });
+  }
+
+  let best = 0;
+  for (let i = 0; i < variants.length; i++) {
+    const v = variants[i];
+    if (coreNameNorm && coreNameNorm === v) {
+      best = Math.max(best, 120);
+    } else if (coreNameNorm && coreNameNorm.indexOf(v) === 0) {
+      best = Math.max(best, 108);
+    } else if (primaryNorm && primaryNorm.indexOf(v) !== -1) {
+      best = Math.max(best, 96);
+    } else if (combinedNorm && combinedNorm.indexOf(v) !== -1) {
+      best = Math.max(best, 82);
+    } else if (v.length >= 2 && primaryNorm && isOrderedSubsequence(v, primaryNorm)) {
+      best = Math.max(best, 74);
+    } else if (v.length >= 2 && combinedNorm && isOrderedSubsequence(v, combinedNorm)) {
+      best = Math.max(best, 64);
+    } else if (i === 0 && v.length >= 2 && primaryNorm) {
+      const ratio = charOverlapRatio(v, primaryNorm);
+      if (ratio >= 0.65) {
+        best = Math.max(best, 50 + Math.round(ratio * 15));
+      }
+    }
+  }
+  return best;
+}
+
+function fuzzyMatchScore(query, primaryName, extraFields) {
+  const raw = String(query || '').trim();
+  if (!raw) return 1;
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return 1;
+
+  const coreNorm = normalizeSearchStr(extractCoreIngredientName(primaryName));
+  const primaryNorm = normalizeSearchStr(primaryName);
+  const combinedNorm = normalizeSearchStr([primaryName].concat(extraFields || []).join(' '));
+
+  let totalScore = 0;
+  for (let i = 0; i < tokens.length; i++) {
+    const score = scoreTokenAgainstCandidate(tokens[i], coreNorm, primaryNorm, combinedNorm);
+    if (score <= 0) return 0;
+    totalScore += score;
+  }
+  return Math.round(totalScore / tokens.length);
+}
+
+function searchIngredientsFuzzy(query, list) {
+  const source = list || INGREDIENTS_DB;
+  const raw = String(query || '').trim();
+  if (!raw) return source.slice();
+
+  const scored = [];
+  for (let i = 0; i < source.length; i++) {
+    const ing = source[i];
+    const roleMeta = ROLE_META[ing.role] || { label: '' };
+    const score = fuzzyMatchScore(raw, ing.name, [
+      ing.category || '',
+      roleMeta.label || '',
+      ing.source_code || '',
+    ]);
+    if (score > 0) {
+      scored.push({ ing, score });
+    }
+  }
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    const aProxy = a.ing.is_proxy ? 1 : 0;
+    const bProxy = b.ing.is_proxy ? 1 : 0;
+    if (aProxy !== bProxy) return aProxy - bProxy;
+    return 0;
+  });
+
+  return scored.map((s) => s.ing);
+}
+
+function searchSupplementsFuzzy(query, list) {
+  const source = list || SUPPLEMENTS_DB;
+  const raw = String(query || '').trim();
+  if (!raw) return source.slice();
+
+  const scored = [];
+  for (let i = 0; i < source.length; i++) {
+    const supp = source[i];
+    const score = fuzzyMatchScore(raw, supp.name, [
+      supp.category || '',
+      supp.brand || '',
+      supp.unit_label || '',
+      supp.note || '',
+    ]);
+    if (score > 0) {
+      scored.push({ supp, score });
+    }
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+  return scored.map((s) => s.supp);
+}
+
+function convertUnitToGrams(num, unitRaw, matchedIng) {
+  const u = String(unitRaw || '').toLowerCase();
+  if (u === 'kg' || u === '千克' || u === '公斤') return Math.round(num * 1000);
+  if (u === '斤') return Math.round(num * 500);
+  if (u === '两') return Math.round(num * 50);
+  if (u === '个' || u === '颗' || u === '枚' || u === '只') {
+    const n = matchedIng ? matchedIng.name : '';
+    if (n.indexOf('鹌鹑蛋') !== -1) return Math.round(num * 10);
+    if (n.indexOf('蛋黄') !== -1) return Math.round(num * 18);
+    return Math.round(num * 50);
+  }
+  return Math.round(num);
+}
+
+function matchBestIngredientForFragment(rawName) {
+  const cleaned = String(rawName || '')
+    .replace(/^(?:生|新鲜|鲜|去骨|大概|大约|约|加|和|与|以及|还有|再加)+/, '')
+    .replace(/(?:大概|大约|约|左右|各)+$/, '')
+    .trim();
+  const cleanedNorm = normalizeSearchStr(cleaned);
+  if (!cleanedNorm) return null;
+
+  let bestIng = null;
+  let bestScore = 0;
+
+  for (let i = 0; i < INGREDIENTS_DB.length; i++) {
+    const ing = INGREDIENTS_DB[i];
+    const coreRaw = extractCoreIngredientName(ing.name);
+    const coreNorm = normalizeSearchStr(coreRaw);
+    const slashParts = coreRaw.split('/').map((p) => normalizeSearchStr(p)).filter(Boolean);
+    const roleMeta = ROLE_META[ing.role] || { label: '' };
+
+    let score = 0;
+    if (coreNorm === cleanedNorm) {
+      score = 200;
+    } else if (slashParts.indexOf(cleanedNorm) !== -1) {
+      score = 195;
+    } else if (coreNorm.indexOf(cleanedNorm) === 0) {
+      score = 175 - Math.min(30, coreNorm.length - cleanedNorm.length);
+    } else if (coreNorm.indexOf(cleanedNorm) !== -1) {
+      score = 155 - Math.min(30, coreNorm.length - cleanedNorm.length);
+    } else if (cleanedNorm.indexOf(coreNorm) !== -1 && coreNorm.length >= 2) {
+      score = 140 - Math.min(25, cleanedNorm.length - coreNorm.length);
+    } else {
+      score = fuzzyMatchScore(cleaned, ing.name, [ing.category || '', roleMeta.label || '']);
+    }
+
+    if (score > 0 && !ing.is_proxy) {
+      score += 6;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIng = ing;
+    }
+  }
+
+  return bestScore >= 60 ? bestIng : null;
+}
+
+function parseNaturalIngredientsText(rawText) {
+  let text = String(rawText || '').trim();
+  if (!text) return { matched: [], unmatched: [] };
+
+  // 全角数字与字母转半角
+  text = text.replace(/[０-９Ａ-Ｚａ-ｚ]/g, (ch) =>
+    String.fromCharCode(ch.charCodeAt(0) - 0xfee0)
+  );
+  // 常见中文口语分量替换
+  text = text
+    .replace(/半公斤/g, '500g')
+    .replace(/一公斤/g, '1000g')
+    .replace(/半斤/g, '250g')
+    .replace(/一斤半/g, '750g')
+    .replace(/一斤/g, '500g')
+    .replace(/[二两]斤/g, '1000g');
+
+  // 按换行、逗号、顿号、分号、加号拆分
+  const clauses = text
+    .split(/[\n\r,，、;；+＋]+/)
+    .map((s) => s.replace(/^\s*(?:\d+[\.\)、]|[\(（]\d+[\)）]|[•·\-])\s*/, '').trim())
+    .filter(Boolean);
+
+  const pairs = [];
+  const weightFirstRegex = /(\d+(?:\.\d+)?)\s*(kg|千克|公斤|g|克|斤|两|个|颗|枚|只)\s*([^\d\s,，、;；:：]+)/gi;
+  const nameFirstRegex = /([^\d\s,，、;；:：=]+?)\s*[:：=]?\s*(\d+(?:\.\d+)?)\s*(kg|千克|公斤|g|克|斤|两|个|颗|枚|只)?/gi;
+
+  clauses.forEach((clause) => {
+    const startsWithWeight = /^\s*\d+(?:\.\d+)?\s*(?:kg|千克|公斤|g|克|斤|两|个|颗|枚|只)/i.test(clause);
+    let m;
+    if (startsWithWeight) {
+      weightFirstRegex.lastIndex = 0;
+      while ((m = weightFirstRegex.exec(clause)) !== null) {
+        pairs.push({ rawName: m[3].trim(), num: parseFloat(m[1]), unit: m[2] || 'g' });
+      }
+    } else {
+      nameFirstRegex.lastIndex = 0;
+      let foundInClause = false;
+      while ((m = nameFirstRegex.exec(clause)) !== null) {
+        const nm = m[1].trim();
+        const num = parseFloat(m[2]);
+        if (nm && !isNaN(num) && num > 0) {
+          pairs.push({ rawName: nm, num, unit: m[3] || 'g' });
+          foundInClause = true;
+        }
+      }
+      if (!foundInClause && clause.length >= 2) {
+        pairs.push({ rawName: clause, num: 0, unit: 'g' });
+      }
+    }
+  });
+
+  const mergedMap = {};
+  const matchedOrder = [];
+  const unmatched = [];
+
+  pairs.forEach((p) => {
+    const ing = matchBestIngredientForFragment(p.rawName);
+    if (!ing) {
+      unmatched.push({
+        rawName: p.rawName,
+        weight: p.num > 0 ? convertUnitToGrams(p.num, p.unit, null) : 0,
+      });
+      return;
+    }
+    const weightG = p.num > 0 ? convertUnitToGrams(p.num, p.unit, ing) : 0;
+    if (mergedMap[ing.id]) {
+      mergedMap[ing.id].weight += weightG;
+    } else {
+      const roleMeta = ROLE_META[ing.role] || { label: '肉类', icon: '🥩' };
+      const entry = {
+        meatId: ing.id,
+        name: ing.name,
+        category: ing.category,
+        roleIcon: roleMeta.icon,
+        roleLabel: roleMeta.label,
+        weight: weightG,
+        rawText: p.rawName,
+        isProxy: Boolean(ing.is_proxy),
+      };
+      mergedMap[ing.id] = entry;
+      matchedOrder.push(entry);
+    }
+  });
+
+  return { matched: matchedOrder, unmatched };
+}
+
 module.exports = {
   INGREDIENTS_DB,
   STANDARDS_DB,
@@ -797,4 +1118,9 @@ module.exports = {
   generateAutoRecipeIngredients,
   inferLifeStageFromCats,
   daysBetweenToday,
+  getCategoryShortLabel,
+  fuzzyMatchScore,
+  searchIngredientsFuzzy,
+  searchSupplementsFuzzy,
+  parseNaturalIngredientsText,
 };

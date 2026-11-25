@@ -1,7 +1,8 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { Home, BookOpen, Refrigerator, User, ChevronLeft } from 'lucide-react';
 import { cn } from './lib/utils';
+import { getUnsavedRecipeGuard, setUnsavedRecipeGuard } from './lib/unsavedGuard';
 import Dashboard from './pages/Dashboard';
 import Recipes from './pages/Recipes';
 import Inventory from './pages/Inventory';
@@ -12,6 +13,7 @@ function getMiniProgramTitle(pathname: string, search: string): { title: string;
   if (pathname === '/') return { title: '喵膳 MeowMeal', isSubPage: false };
   if (pathname === '/recipes') return { title: '猫饭食谱', isSubPage: false };
   if (pathname.startsWith('/recipes/create')) return { title: '新建专属食谱', isSubPage: true };
+  if (pathname.startsWith('/recipes/edit/')) return { title: '编辑食谱', isSubPage: true };
   if (pathname.startsWith('/recipes/')) return { title: '食谱营养详情', isSubPage: true };
   if (pathname.startsWith('/inventory')) return { title: '冰箱库存', isSubPage: false };
   if (pathname.startsWith('/profile')) return { title: '我的', isSubPage: false };
@@ -26,6 +28,27 @@ function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { title, isSubPage } = getMiniProgramTitle(location.pathname, location.search);
+  const [pendingNav, setPendingNav] = useState<{ message: string; action: () => void } | null>(null);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (getUnsavedRecipeGuard().active) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  const requestNavigation = (action: () => void) => {
+    const guard = getUnsavedRecipeGuard();
+    if (guard.active) {
+      setPendingNav({ message: guard.message || '未保存食谱，确认返回？', action });
+      return;
+    }
+    action();
+  };
 
   const navItems = [
     { path: '/', label: '首页', icon: Home },
@@ -44,7 +67,7 @@ function Layout({ children }: { children: React.ReactNode }) {
               {isSubPage ? (
                 <button
                   type="button"
-                  onClick={() => navigate(-1)}
+                  onClick={() => requestNavigation(() => navigate(-1))}
                   className="flex items-center text-stone-800 hover:text-stone-950 -ml-1 py-1 pr-2"
                   aria-label="返回"
                 >
@@ -90,9 +113,13 @@ function Layout({ children }: { children: React.ReactNode }) {
                 ? location.pathname === '/'
                 : location.pathname.startsWith(item.path);
               return (
-                <Link
+                <button
                   key={item.path}
-                  to={item.path}
+                  type="button"
+                  onClick={() => {
+                    if (location.pathname === item.path) return;
+                    requestNavigation(() => navigate(item.path));
+                  }}
                   className={cn(
                     "flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors",
                     isActive ? "text-[#FF7B4A]" : "text-stone-400 hover:text-stone-600"
@@ -100,11 +127,48 @@ function Layout({ children }: { children: React.ReactNode }) {
                 >
                   <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
                   <span className="text-[10px] font-medium">{item.label}</span>
-                </Link>
+                </button>
               );
             })}
           </div>
         </nav>
+
+        {/* 全局未保存食谱返回提醒弹窗 */}
+        {pendingNav && (
+          <div
+            className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50 backdrop-blur-[1px]"
+            onClick={() => setPendingNav(null)}
+          >
+            <div
+              className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-bold text-stone-900 mb-2">未保存食谱</h3>
+              <p className="text-sm text-stone-600 mb-6">{pendingNav.message}</p>
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPendingNav(null)}
+                  className="px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+                >
+                  继续编辑
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const action = pendingNav.action;
+                    setPendingNav(null);
+                    setUnsavedRecipeGuard(false);
+                    action();
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors"
+                >
+                  确认返回
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

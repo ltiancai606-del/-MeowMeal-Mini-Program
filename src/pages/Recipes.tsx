@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Search,
   AlertTriangle,
+  Sparkles,
 } from 'lucide-react';
 import {
   MOCK_RECIPES,
@@ -37,11 +38,16 @@ import {
   getConfidenceBadgeInfo,
   getSupplementById,
   inferLifeStageFromCats,
+  searchIngredientsFuzzy,
+  searchSupplementsFuzzy,
+  parseNaturalIngredientsText,
+  ParsedNaturalIngredientItem,
   NutrientEvaluation,
 } from '../lib/nutritionEngine';
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { cn } from '../lib/utils';
+import { setUnsavedRecipeGuard } from '../lib/unsavedGuard';
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
@@ -128,6 +134,7 @@ interface IngredientPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
   isReplacing: boolean;
+  existingMeatIds?: string[];
   initialSelectedIds: string[];
   initialRoleFilter: string;
   onConfirm: (selectedIds: string[]) => void;
@@ -137,6 +144,7 @@ function IngredientPickerModal({
   isOpen,
   onClose,
   isReplacing,
+  existingMeatIds = [],
   initialSelectedIds,
   initialRoleFilter,
   onConfirm,
@@ -154,15 +162,11 @@ function IngredientPickerModal({
     }
   }, [isOpen, initialSelectedIds, initialRoleFilter]);
 
-  const query = searchQuery.trim().toLowerCase();
-  const filteredMeats = MEAT_DATABASE.filter((m) => {
-    const matchesSearch =
-      !query ||
-      m.name.toLowerCase().includes(query) ||
-      m.category.toLowerCase().includes(query);
-    const matchesRole = roleFilter === 'all' || m.role === roleFilter;
-    return matchesSearch && matchesRole;
-  });
+  const query = searchQuery.trim();
+  const roleMatchedMeats = MEAT_DATABASE.filter(
+    (m) => roleFilter === 'all' || m.role === roleFilter
+  );
+  const filteredMeats = query ? searchIngredientsFuzzy(query, roleMatchedMeats) : roleMatchedMeats;
 
   const groupedMeats = filteredMeats.reduce((acc, meat) => {
     const group = meat.category || '其他';
@@ -245,7 +249,7 @@ function IngredientPickerModal({
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
           <input
             type="text"
-            placeholder="搜索 176 项食材"
+            placeholder="模糊搜索 176 项食材（如 兔脊 / 鸡胸 / 三文鱼）"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-11 pr-4 py-3 bg-stone-50 border border-stone-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-[#FF7B4A]/20 shadow-sm"
@@ -316,11 +320,16 @@ function IngredientPickerModal({
                       {meats.map((meat) => {
                         const roleInfo = ROLE_META[meat.role] || ROLE_META.red_meat;
                         const confidence = getConfidenceBadgeInfo(meat);
+                        const isAlreadyAdded = existingMeatIds.includes(meat.id);
 
                         return (
                           <label
                             key={meat.id}
-                            className="flex justify-between items-center p-2.5 rounded-xl cursor-pointer hover:bg-stone-50 transition-colors border border-transparent hover:border-stone-100 gap-2"
+                            className={`flex justify-between items-center p-2.5 rounded-xl transition-colors border border-transparent gap-2 ${
+                              isAlreadyAdded
+                                ? 'opacity-50 cursor-not-allowed bg-stone-50/70'
+                                : 'cursor-pointer hover:bg-stone-50 hover:border-stone-100'
+                            }`}
                           >
                             <div className="flex items-center gap-3 flex-1 min-w-0">
                               <div className="w-9 h-9 rounded-xl bg-stone-50 flex items-center justify-center text-lg border border-stone-100/50 shrink-0">
@@ -344,7 +353,11 @@ function IngredientPickerModal({
                               </div>
                             </div>
                             <div className="flex items-center shrink-0">
-                              {isReplacing ? (
+                              {isAlreadyAdded ? (
+                                <span className="text-[11px] px-2 py-0.5 rounded-full bg-stone-100 text-stone-400 font-medium">
+                                  已添加
+                                </span>
+                              ) : isReplacing ? (
                                 <input
                                   type="radio"
                                   name="shared_meat_picker"
@@ -427,26 +440,9 @@ function SupplementPickerModal({
 
   if (!isOpen) return null;
 
-  const visibleSupps = SUPPLEMENTS.filter((s) => {
-    const sq = searchQuery.trim().toLowerCase();
-    if (sq && !s.name.toLowerCase().includes(sq) && !s.category.toLowerCase().includes(sq)) {
-      return false;
-    }
-    if (!isReplacing) {
-      const existingTypes = existingSupplementIds
-        .map((id) => SUPPLEMENTS.find((sup) => sup.id === id)?.type)
-        .filter(Boolean);
-
-      if (selectedIds.includes(s.id)) return true;
-      if (existingTypes.includes(s.type)) return false;
-
-      const selectedTypesInPicker = selectedIds
-        .map((id) => SUPPLEMENTS.find((sup) => sup.id === id)?.type)
-        .filter(Boolean);
-      if (selectedTypesInPicker.includes(s.type)) return false;
-    }
-    return true;
-  });
+  const visibleSupps = searchQuery.trim()
+    ? searchSupplementsFuzzy(searchQuery, SUPPLEMENTS)
+    : SUPPLEMENTS;
 
   return (
     <div
@@ -459,7 +455,7 @@ function SupplementPickerModal({
       >
         <div className="flex justify-between items-center mb-4 shrink-0">
           <h3 className="text-xl font-bold text-stone-800">
-            {isReplacing ? '替换营养剂品牌' : '添加营养剂'}
+            {isReplacing ? '更换营养补剂' : '添加营养补剂'}
           </h3>
           <button
             onClick={onClose}
@@ -473,7 +469,7 @@ function SupplementPickerModal({
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
           <input
             type="text"
-            placeholder="搜索营养剂"
+            placeholder="模糊搜索补剂（如 柠檬钙 / vb / 鱼油 / 牛磺酸）"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-11 pr-4 py-3 bg-stone-50 border border-stone-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-[#FF7B4A]/20 shadow-sm"
@@ -482,54 +478,59 @@ function SupplementPickerModal({
 
         <div className="flex-1 overflow-y-auto min-h-0 bg-white rounded-2xl shadow-sm border border-stone-100/50">
           {visibleSupps.length > 0 ? (
-            visibleSupps.map((supp, idx, arr) => (
-              <label
-                key={supp.id}
-                className={`flex justify-between items-center p-4 cursor-pointer hover:bg-stone-50 transition-colors ${
-                  idx !== arr.length - 1 ? 'border-b border-stone-50' : ''
-                }`}
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
-                  <div className="w-10 h-10 rounded-xl bg-stone-50 flex items-center justify-center text-xl border border-stone-100/50 shrink-0">
-                    💊
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-stone-800 text-sm truncate">{supp.name}</div>
-                    <div className="text-xs text-stone-400 mt-0.5">
-                      {supp.category} · {supp.unit_label}
+            visibleSupps.map((supp, idx, arr) => {
+              const isAlreadyAdded = existingSupplementIds.includes(supp.id);
+              return (
+                <label
+                  key={supp.id}
+                  className={`flex justify-between items-center p-4 transition-colors ${
+                    isAlreadyAdded ? 'opacity-50 cursor-not-allowed bg-stone-50/70' : 'cursor-pointer hover:bg-stone-50'
+                  } ${idx !== arr.length - 1 ? 'border-b border-stone-50' : ''}`}
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0 pr-4">
+                    <div className="w-10 h-10 rounded-xl bg-stone-50 flex items-center justify-center text-xl border border-stone-100/50 shrink-0">
+                      💊
                     </div>
-                    {supp.note && (
-                      <div className="text-[11px] text-[#FF7B4A] mt-1 flex items-start gap-1">
-                        <Info className="w-3 h-3 shrink-0 mt-0.5" />
-                        <span>{supp.note}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-stone-800 text-sm truncate">{supp.name}</div>
+                      <div className="text-xs text-stone-400 mt-0.5">
+                        {supp.category} · {supp.unit_label}
                       </div>
+                      {supp.note && (
+                        <div className="text-[11px] text-[#FF7B4A] mt-1 flex items-start gap-1">
+                          <Info className="w-3 h-3 shrink-0 mt-0.5" />
+                          <span>{supp.note}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center shrink-0">
+                    {isAlreadyAdded ? (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-stone-100 text-stone-400 font-medium">
+                        已添加
+                      </span>
+                    ) : isReplacing ? (
+                      <input
+                        type="radio"
+                        name="shared_supp_picker"
+                        checked={selectedIds.includes(supp.id)}
+                        onChange={() => setSelectedIds([supp.id])}
+                        className="text-[#FF7B4A] focus:ring-[#FF7B4A]/20 w-5 h-5 border-stone-300"
+                      />
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(supp.id)}
+                        onChange={() => toggleSelection(supp.id)}
+                        className="text-[#FF7B4A] focus:ring-[#FF7B4A]/20 rounded w-5 h-5 border-stone-300"
+                      />
                     )}
                   </div>
-                </div>
-                <div className="flex items-center shrink-0">
-                  {isReplacing ? (
-                    <input
-                      type="radio"
-                      name="shared_supp_picker"
-                      checked={selectedIds.includes(supp.id)}
-                      onChange={() => setSelectedIds([supp.id])}
-                      className="text-[#FF7B4A] focus:ring-[#FF7B4A]/20 w-5 h-5 border-stone-300"
-                    />
-                  ) : (
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(supp.id)}
-                      onChange={() => toggleSelection(supp.id)}
-                      className="text-[#FF7B4A] focus:ring-[#FF7B4A]/20 rounded w-5 h-5 border-stone-300"
-                    />
-                  )}
-                </div>
-              </label>
-            ))
+                </label>
+              );
+            })
           ) : (
-            <div className="p-8 text-center text-stone-500 text-sm">
-              {searchQuery ? '没有找到匹配的营养剂' : '所有类别补剂均已添加，可在列表中点击切换品牌'}
-            </div>
+            <div className="p-8 text-center text-stone-500 text-sm">没有找到匹配的营养剂</div>
           )}
         </div>
 
@@ -546,6 +547,109 @@ function SupplementPickerModal({
             className="px-4 py-2 text-sm font-medium text-white bg-[#FF7B4A] hover:bg-orange-600 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             确认并自动重算
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SmartIngredientParseModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onApply: (items: ParsedNaturalIngredientItem[]) => void;
+}
+
+function SmartIngredientParseModal({ isOpen, onClose, onApply }: SmartIngredientParseModalProps) {
+  const [text, setText] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setText('');
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const parsed = parseNaturalIngredientsText(text);
+
+  return (
+    <div
+      className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center bg-stone-900/40 backdrop-blur-sm transition-opacity"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full sm:w-[460px] rounded-t-3xl sm:rounded-3xl p-6 pb-8 max-h-[85vh] flex flex-col shadow-xl animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-start mb-3 shrink-0">
+          <div>
+            <h3 className="text-lg font-bold text-stone-800 flex items-center gap-1.5">
+              <Sparkles className="w-5 h-5 text-violet-600" />
+              智能识别食材
+            </h3>
+            <p className="text-xs text-stone-400 mt-0.5">像识别快递地址一样，粘贴食材与克重自动入方</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 bg-stone-100 rounded-full text-stone-500 hover:bg-stone-200 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={4}
+          placeholder="示例：兔里脊500g兔腹肉500g 鸡心200克 猪肝50g 青口贝100g"
+          className="w-full p-3.5 bg-stone-50 border border-stone-200 rounded-2xl text-sm text-stone-800 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 resize-none mb-3"
+          autoFocus
+        />
+
+        {(parsed.matched.length > 0 || parsed.unmatched.length > 0) && (
+          <div className="overflow-y-auto max-h-52 space-y-2 mb-4 pr-1">
+            {parsed.matched.length > 0 && (
+              <>
+                <div className="text-xs font-semibold text-emerald-600">
+                  已识别 {parsed.matched.length} 项食材：
+                </div>
+                {parsed.matched.map((item) => (
+                  <div
+                    key={item.meatId}
+                    className="flex items-center justify-between px-3 py-2 rounded-xl bg-stone-50 border border-stone-100 text-xs"
+                  >
+                    <span className="font-medium text-stone-800 truncate pr-2">
+                      {item.roleIcon} {item.name}
+                    </span>
+                    <span className="font-bold text-[#FF7B4A] shrink-0">{item.weight}g</span>
+                  </div>
+                ))}
+              </>
+            )}
+            {parsed.unmatched.length > 0 && (
+              <div className="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                未识别片段：{parsed.unmatched.join('、')}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 text-sm font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            disabled={parsed.matched.length === 0}
+            onClick={() => onApply(parsed.matched)}
+            className="flex-1 py-2.5 text-sm font-semibold text-white bg-[#FF7B4A] hover:bg-orange-600 rounded-xl transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+          >
+            完成识别并添加{parsed.matched.length > 0 ? ` (${parsed.matched.length})` : ''}
           </button>
         </div>
       </div>
@@ -813,6 +917,35 @@ function CreateOrEditRecipe() {
   const [showSupplementPicker, setShowSupplementPicker] = useState(false);
   const [replacingSupplementIdx, setReplacingSupplementIdx] = useState<number | null>(null);
   const [pickerInitialSuppIds, setPickerInitialSuppIds] = useState<string[]>([]);
+  const [showFullNutritionModal, setShowFullNutritionModal] = useState(false);
+  const [showSmartParser, setShowSmartParser] = useState(false);
+  const [showUnsavedLeaveModal, setShowUnsavedLeaveModal] = useState(false);
+
+  const hasUnsavedDraft =
+    isEditing || step >= 2 || name.trim().length > 0 || selectedCats.length > 0 || previewIngredients.length > 0;
+
+  useEffect(() => {
+    setUnsavedRecipeGuard(hasUnsavedDraft, '未保存食谱，确认返回？当前编辑内容将会丢失。');
+    return () => {
+      setUnsavedRecipeGuard(false);
+    };
+  }, [hasUnsavedDraft]);
+
+  // 冰箱库存反推模式：汇总未过期可用库存克重
+  const fridgeStockMap: Record<string, number> = {};
+  if (mode === 'by_inventory') {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    MOCK_INVENTORY.forEach((inv) => {
+      const w = Number(inv.weight) || 0;
+      if (w <= 0) return;
+      if (inv.expiryDate) {
+        const exp = new Date(inv.expiryDate);
+        if (!isNaN(exp.getTime()) && exp.getTime() < todayStart.getTime()) return;
+      }
+      fridgeStockMap[inv.meatId] = (fridgeStockMap[inv.meatId] || 0) + w;
+    });
+  }
 
   const parsedPreviewIngredients = previewIngredients.map((i) => ({
     meatId: i.meatId,
@@ -903,20 +1036,45 @@ function CreateOrEditRecipe() {
   const handleConfirmIngredientPicker = (selectedIds: string[]) => {
     if (replacingIngredientIdx !== null) {
       if (selectedIds.length > 0) {
+        const targetId = selectedIds[0];
         setPreviewIngredients((prev) => {
+          const isDup = prev.some((item, idx) => idx !== replacingIngredientIdx && item.meatId === targetId);
+          if (isDup) return prev;
           const next = [...prev];
-          next[replacingIngredientIdx] = { ...next[replacingIngredientIdx], meatId: selectedIds[0] };
+          next[replacingIngredientIdx] = { ...next[replacingIngredientIdx], meatId: targetId };
           return next;
         });
       }
     } else {
-      const added = selectedIds.map((meatId) => ({ meatId, weight: '' }));
-      setPreviewIngredients((prev) => [...prev, ...added]);
+      setPreviewIngredients((prev) => {
+        const existingSet = new Set(prev.map((i) => i.meatId));
+        const added = selectedIds
+          .filter((meatId) => !existingSet.has(meatId))
+          .map((meatId) => ({ meatId, weight: 0 }));
+        return [...prev, ...added];
+      });
     }
     setShowIngredientPicker(false);
   };
 
-  // Step 3: Supplement operations
+  const handleApplySmartParse = (matchedItems: ParsedNaturalIngredientItem[]) => {
+    setPreviewIngredients((prev) => {
+      const next = [...prev];
+      matchedItems.forEach((item) => {
+        const idx = next.findIndex((x) => x.meatId === item.meatId);
+        if (idx !== -1) {
+          const curW = typeof next[idx].weight === 'string' ? parseFloat(next[idx].weight) || 0 : next[idx].weight;
+          next[idx] = { ...next[idx], weight: item.weight > 0 ? item.weight : curW };
+        } else {
+          next.push({ meatId: item.meatId, weight: item.weight });
+        }
+      });
+      return next;
+    });
+    setShowSmartParser(false);
+  };
+
+  // Step 3 & Step 4: Supplement operations
   const handleAutoRecalcPreviewSupplements = () => {
     const recomputed = recommendSupplements(
       parsedPreviewIngredients,
@@ -925,18 +1083,6 @@ function CreateOrEditRecipe() {
       previewSupplements
     );
     setPreviewSupplements(recomputed);
-  };
-
-  const handlePreviewBrandChange = (index: number, newSupplementId: string) => {
-    const newSupp = getSupplementById(newSupplementId);
-    if (!newSupp) return;
-    const meatOnly = calculateRecipeNutrition(parsedPreviewIngredients, [], standard, lifeStage);
-    const recomputed = computeRecommendedAmountForSupplement(newSupp, meatOnly, standard, lifeStage);
-    setPreviewSupplements((prev) => {
-      const next = [...prev];
-      next[index] = { supplementId: newSupplementId, amount: recomputed };
-      return next;
-    });
   };
 
   const handleOpenReplaceSupplement = (idx: number) => {
@@ -996,11 +1142,15 @@ function CreateOrEditRecipe() {
   const handleSave = () => {
     const totalDays = parseInt(days) || 7;
     const validIngredients = parsedPreviewIngredients.filter((i) => i.weight > 0);
+    if (validIngredients.length === 0) {
+      setError('请至少保留一种重量大于 0g 的食材');
+      return;
+    }
     const validSupplements = parsedPreviewSupplements.filter((s) => s.amount > 0);
 
     const recipeData: Recipe = {
       id: isEditing ? existingRecipe!.id : `r${Date.now()}`,
-      name: name.trim(),
+      name: name.trim() || `我的${standard}营养餐`,
       catIds: selectedCats,
       standard,
       lifeStage,
@@ -1025,6 +1175,7 @@ function CreateOrEditRecipe() {
     }
 
     saveRecipes();
+    setUnsavedRecipeGuard(false);
     navigate(`/recipes/${recipeData.id}`);
   };
 
@@ -1033,23 +1184,79 @@ function CreateOrEditRecipe() {
       ? calculateRecipeNutrition(parsedPreviewIngredients, parsedPreviewSupplements, standard, lifeStage)
       : null;
 
+  const previewMacroData = previewCalc
+    ? [
+        { name: '蛋白质', value: previewCalc.totals.protein_g, me: previewCalc.macroME.proteinPct },
+        { name: '脂肪', value: previewCalc.totals.fat_g, me: previewCalc.macroME.fatPct },
+        { name: '碳水', value: previewCalc.totals.carb_g, me: previewCalc.macroME.carbPct },
+      ]
+    : [];
+
+  const previewCatData = previewCalc
+    ? Object.entries(previewCalc.roleWeights)
+        .filter(([, w]) => w > 0)
+        .map(([role, value]) => ({
+          name: ROLE_META[role as keyof typeof ROLE_META]?.label || role,
+          value,
+        }))
+    : [];
+
+  const previewRedEvaluations = previewCalc ? previewCalc.evaluations.filter((ev) => ev.status === 'red') : [];
+  const previewYellowEvaluations = previewCalc ? previewCalc.evaluations.filter((ev) => ev.status === 'yellow') : [];
+  const previewUnqualified = [...previewRedEvaluations, ...previewYellowEvaluations];
+  const previewUnqualifiedKeys = new Set(previewUnqualified.map((ev) => ev.key));
+  const previewDisplayEvaluations = previewCalc
+    ? [
+        ...previewUnqualified,
+        ...previewCalc.evaluations.filter((ev) => ev.core && !previewUnqualifiedKeys.has(ev.key)),
+      ]
+    : [];
+  const previewUnqualifiedSummaryParts = [
+    previewRedEvaluations.length > 0 ? `${previewRedEvaluations.length} 项红灯` : '',
+    previewYellowEvaluations.length > 0 ? `${previewYellowEvaluations.length} 项黄灯` : '',
+  ].filter(Boolean);
+
+  const previewGroupedFullEvaluations = previewCalc
+    ? previewCalc.evaluations.reduce((acc, ev) => {
+        if (!acc[ev.group]) acc[ev.group] = [];
+        acc[ev.group].push(ev);
+        return acc;
+      }, {} as Record<string, NutrientEvaluation[]>)
+    : {};
+
   return (
     <div className="p-5 space-y-5 bg-[#F9F7F4] min-h-full pb-40">
       <header className="mb-6 flex items-center gap-2">
         <button
           onClick={() => {
-            if (step > 1 && step < 4) setStep(step - 1);
-            else navigate(-1);
+            if (step > 1) {
+              setStep(step - 1);
+            } else if (isEditing || name.trim().length > 0 || previewIngredients.length > 0) {
+              setShowUnsavedLeaveModal(true);
+            } else {
+              navigate(-1);
+            }
           }}
           className="text-stone-500 hover:text-stone-700 w-8 h-8 flex items-center justify-center bg-white rounded-full shadow-sm"
         >
           <ChevronRight className="w-5 h-5 rotate-180" />
         </button>
-        <div className="flex-1 text-center pr-8">
+        <div className="flex-1 text-center">
           <h1 className="text-lg font-bold text-stone-900">
             {isEditing ? '编辑食谱' : '新建食谱'} {step}/4
           </h1>
         </div>
+        {step >= 2 ? (
+          <button
+            type="button"
+            onClick={() => setShowUnsavedLeaveModal(true)}
+            className="text-xs text-stone-500 hover:text-stone-700 px-2 py-1 rounded-lg"
+          >
+            退出
+          </button>
+        ) : (
+          <div className="w-8" />
+        )}
       </header>
 
       {/* Step Indicator */}
@@ -1381,15 +1588,34 @@ function CreateOrEditRecipe() {
 
           {/* 可编辑食材清单 */}
           <div className="bg-white rounded-3xl p-5 shadow-sm border border-stone-50">
-            <div className="flex justify-between items-center mb-1">
+            <div className="flex justify-between items-center mb-2 gap-2">
               <h2 className="text-base font-bold text-stone-800 flex items-center gap-2">
                 <span className="text-stone-400">🥩</span> 食材配方调整
               </h2>
-              <span className="text-[11px] text-stone-400">可替换、增删及修改克数</span>
+              <button
+                type="button"
+                onClick={() => setShowSmartParser(true)}
+                className="text-xs font-semibold text-violet-700 bg-violet-50 border border-violet-200 px-2.5 py-1 rounded-full hover:bg-violet-100 flex items-center gap-1 shrink-0 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> 智能识别
+              </button>
             </div>
-            <p className="text-xs text-stone-500 mb-4">
+            <p className="text-xs text-stone-500 mb-3">
               默认按 {standard}（{lifeStage === 'kitten' ? '幼猫' : '成猫'}）角色比例生成，调整食材后可点击下方“智能重算补剂”。
             </p>
+
+            {mode === 'by_inventory' && (
+              <div className="mb-3 px-3 py-2 rounded-xl bg-sky-50 border border-sky-200/80 flex items-center flex-wrap gap-2 text-[11px] text-sky-900">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-bold border border-sky-200">
+                  🧊 冰箱库存
+                </span>
+                <span className="text-stone-500">来自冰箱可用库存</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 font-bold border border-orange-200">
+                  🛒 需补购
+                </span>
+                <span className="text-stone-500">需额外采购补充</span>
+              </div>
+            )}
 
             <div className="space-y-3">
               {previewIngredients.map((item, idx) => {
@@ -1400,6 +1626,9 @@ function CreateOrEditRecipe() {
                 const weightNum = typeof item.weight === 'string' ? parseFloat(item.weight) || 0 : item.weight;
                 const totalW = previewCalc?.totalWeightG || 0;
                 const percentage = totalW > 0 ? ((weightNum / totalW) * 100).toFixed(1) : '0.0';
+                const fridgeStockG = Math.round(fridgeStockMap[item.meatId] || 0);
+                const isFromFridge = mode === 'by_inventory' && fridgeStockG > 0;
+                const needBuyG = mode === 'by_inventory' ? Math.max(0, Math.round(weightNum - fridgeStockG)) : 0;
 
                 return (
                   <div
@@ -1411,7 +1640,24 @@ function CreateOrEditRecipe() {
                         {roleInfo.icon}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="font-bold text-sm text-stone-800 truncate">{meat.name}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {mode === 'by_inventory' && isFromFridge && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 font-bold shrink-0">
+                              🧊 冰箱 {fridgeStockG}g
+                            </span>
+                          )}
+                          {mode === 'by_inventory' && !isFromFridge && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold shrink-0">
+                              🛒 需补购
+                            </span>
+                          )}
+                          {mode === 'by_inventory' && isFromFridge && needBuyG > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold shrink-0">
+                              🛒 补买{needBuyG}g
+                            </span>
+                          )}
+                          <span className="font-bold text-sm text-stone-800 truncate">{meat.name}</span>
+                        </div>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="text-[10px] text-stone-500">
                             {roleInfo.label} · {percentage}%
@@ -1491,7 +1737,6 @@ function CreateOrEditRecipe() {
                 previewSupplements.map((item, idx) => {
                   const supp = SUPPLEMENTS.find((s) => s.id === item.supplementId);
                   if (!supp) return null;
-                  const sameCategoryBrands = SUPPLEMENTS.filter((s) => s.type === supp.type);
 
                   return (
                     <div
@@ -1541,26 +1786,6 @@ function CreateOrEditRecipe() {
                           </button>
                         </div>
                       </div>
-                      {sameCategoryBrands.length > 1 && (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] text-orange-700/70">切换品牌(重算):</span>
-                          {sameCategoryBrands.map((brandOption) => (
-                            <button
-                              key={brandOption.id}
-                              type="button"
-                              onClick={() => handlePreviewBrandChange(idx, brandOption.id)}
-                              className={cn(
-                                'text-[10px] px-2 py-0.5 rounded-full border transition-colors',
-                                brandOption.id === supp.id
-                                  ? 'bg-[#FF7B4A] text-white border-[#FF7B4A]'
-                                  : 'bg-white text-orange-800 border-orange-200 hover:bg-orange-50'
-                              )}
-                            >
-                              {brandOption.name}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   );
                 })
@@ -1597,48 +1822,411 @@ function CreateOrEditRecipe() {
         </div>
       )}
 
-      {step === 4 && (
-        <div className="animate-in slide-in-from-right-4 flex flex-col items-center justify-center py-10 space-y-6 text-center">
-          <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center">
-            <Check className="w-12 h-12" strokeWidth={3} />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-stone-800 mb-2">食谱生成成功!</h2>
-            <p className="text-stone-500 text-sm">{name}</p>
+      {/* Step 4: 直接展示食谱详情页-编辑，方便用户实时对照标准微调并保存 */}
+      {step === 4 && previewCalc && (
+        <div className="animate-in slide-in-from-right-4 space-y-4">
+          {/* 顶部概览卡片 + 双饼图 */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
+            <div className="flex justify-between items-start gap-2 mb-1">
+              <h2 className="text-lg font-bold text-stone-800">{name.trim() || `我的${standard}营养餐`}</h2>
+              <span className="text-[11px] bg-[#FFFAF5] text-[#FF7B4A] border border-orange-100 px-2 py-0.5 rounded-full font-medium shrink-0">
+                详情编辑校验
+              </span>
+            </div>
+            <p className="text-xs text-stone-500 mb-4">
+              总重量: {Math.round(previewCalc.totalWeightG)}g · 总热量: {Math.round(previewCalc.totalKcal)} kcal · 周期: {days}天 · 钙磷比: {previewCalc.caPRatio.toFixed(2)}:1
+              {selectedCats.length > 0 && (
+                <> · 🐱 {selectedCats.map((cId) => MOCK_CATS.find((c) => c.id === cId)?.name).filter(Boolean).join('、')}</>
+              )}
+            </p>
+
+            <div className="grid grid-cols-2 gap-4 mb-2">
+              <div className="h-40">
+                <h3 className="text-xs font-semibold text-center text-stone-600 mb-2">宏量营养素</h3>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsPieChart>
+                    <Pie
+                      data={previewMacroData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={25}
+                      outerRadius={40}
+                      paddingAngle={2}
+                      dataKey="value"
+                      isAnimationActive={false}
+                    >
+                      {previewMacroData.map((entry, index) => (
+                        <Cell key={`step4-macro-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<MacroTooltip />} />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="h-40">
+                <h3 className="text-xs font-semibold text-center text-stone-600 mb-2">食材角色配比</h3>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsPieChart>
+                    <Pie
+                      data={previewCatData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={25}
+                      outerRadius={40}
+                      paddingAngle={2}
+                      dataKey="value"
+                      isAnimationActive={false}
+                    >
+                      {previewCatData.map((entry, index) => (
+                        <Cell key={`step4-cat-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<IngredientTooltip totalWeight={previewCalc.totalWeightG} />} />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
 
-          <div className="w-full bg-white p-5 rounded-3xl border border-stone-100 shadow-sm text-left mt-4 space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-stone-500 text-sm">适配猫咪</span>
-              <span className="font-bold text-stone-800">
-                {selectedCats.map((cId) => MOCK_CATS.find((c) => c.id === cId)?.name).join('、')}
+          {/* 安全上限预警 & 近似映射提醒 */}
+          {previewCalc.highRiskAlerts.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-3.5 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-red-700 leading-relaxed">
+                <p className="font-bold mb-1">安全上限预警（超过 SUL / Max）</p>
+                <p>
+                  以下重点营养素超出安全上限：
+                  {previewCalc.highRiskAlerts
+                    .map((ev) => `${ev.label} (${ev.per1000kcal.toFixed(ev.decimals)} ${ev.unit} > ${ev.max})`)
+                    .join('、')}
+                  ，请在下方直接调整肝脏、海鲜或补剂用量。
+                </p>
+              </div>
+            </div>
+          )}
+
+          {previewCalc.proxyIngredients.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 flex items-start gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-amber-800 leading-relaxed">
+                <span className="font-bold">近似估算数据，建议优先选用实测肉类：</span>
+                当前包含 {previewCalc.proxyIngredients.map((p) => p.name).join('、')}（L3/L4 近似映射）。
+              </div>
+            </div>
+          )}
+
+          {/* 营养达标分析 */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
+            <div className="flex justify-between items-center mb-3 gap-2">
+              <h3 className="font-semibold text-stone-800 text-sm">营养达标分析 (每 1,000 kcal ME)</h3>
+              <button
+                type="button"
+                onClick={() => setShowFullNutritionModal(true)}
+                className="text-[#FF7B4A] text-xs font-medium hover:text-orange-600 flex items-center gap-0.5 shrink-0"
+              >
+                全部 28 项 <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex bg-stone-100 p-0.5 rounded-lg text-[11px]">
+                {(['NRC', 'AAFCO'] as const).map((std) => (
+                  <button
+                    key={std}
+                    type="button"
+                    onClick={() => setStandard(std)}
+                    className={cn(
+                      'px-2.5 py-1 rounded-md font-medium transition-colors',
+                      standard === std ? 'bg-white text-[#FF7B4A] shadow-xs' : 'text-stone-500'
+                    )}
+                  >
+                    {std === 'NRC' ? 'NRC 2006' : 'AAFCO'}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2.5 py-1 rounded-lg">
+                自动判定：{lifeStage === 'kitten' ? '幼猫生长期' : '成猫维持期'}
               </span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-stone-500 text-sm">营养标准</span>
-              <span className="font-bold text-stone-800">
-                {standard} · {lifeStage === 'kitten' ? '幼猫生长期' : '成猫维持期'}
-              </span>
+
+            {previewUnqualified.length > 0 ? (
+              <div className="mb-3 px-3 py-2 rounded-xl bg-red-50 border border-red-200/80 text-xs font-semibold text-red-600">
+                ⚠ 共 {previewUnqualified.length} 项未达标（{previewUnqualifiedSummaryParts.join(' · ')}），已置顶展示
+              </div>
+            ) : (
+              <div className="mb-3 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs font-semibold text-emerald-700">
+                ✓ 全部营养指标均已达标
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="text-[11px] text-stone-500 bg-stone-50">
+                  <tr>
+                    <th className="px-2.5 py-2 rounded-l-lg font-medium">营养素</th>
+                    <th className="px-2 py-2 font-medium">每1000kcal / 整份</th>
+                    <th className="px-2 py-2 font-medium">标准范围</th>
+                    <th className="px-2 py-2 rounded-r-lg font-medium text-center">状态</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-50">
+                  {previewDisplayEvaluations.map((ev) => (
+                    <tr
+                      key={ev.key}
+                      className={cn(
+                        ev.status === 'red' && 'bg-red-50/50',
+                        ev.status === 'yellow' && 'bg-amber-50/50'
+                      )}
+                    >
+                      <td className="px-2.5 py-2.5 text-stone-800 font-medium whitespace-nowrap">
+                        {ev.label}
+                        {ev.hasMissingSource && (
+                          <span className="text-stone-400 ml-0.5" title="部分食材未报告此项">
+                            *
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2.5 text-stone-700 whitespace-nowrap">
+                        <div className="font-semibold">
+                          {ev.per1000kcal.toFixed(ev.decimals)} {ev.unit}
+                          {ev.key !== 'ca_p_ratio' && <span className="text-[10px] font-normal text-stone-400">/千卡</span>}
+                        </div>
+                        {ev.key !== 'ca_p_ratio' && (
+                          <div className="text-[10px] text-stone-400">
+                            整份 {ev.totalAmount.toFixed(ev.decimals)} {ev.unit}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-2 py-2.5 text-stone-500 text-[11px]">{formatBoundsText(ev)}</td>
+                      <td className="px-2 py-2.5 text-center">
+                        <TrafficLightBadge ev={ev} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="mt-3 space-y-1 text-[11px] text-stone-400">
+                <p className="text-center">
+                  * 主数值为每 1,000 kcal 代谢能含量（与标准比对），小字为整份 {Math.round(previewCalc.totalWeightG)}g 食谱总含量
+                </p>
+                {previewCalc.hasMissingData && (
+                  <p className="text-center text-stone-400/90 flex items-center justify-center gap-1">
+                    <Info className="w-3 h-3 shrink-0" />
+                    <span>含未检测项，不代表为 0（标 * 项在部分肉类食材中未报告）</span>
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-stone-500 text-sm">总制备量</span>
-              <span className="font-bold text-stone-800">
-                {Math.round(parsedPreviewIngredients.reduce((s, x) => s + x.weight, 0))}g
-              </span>
+          </div>
+
+          {/* 食材清单（编辑态） */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
+            <div className="flex justify-between items-center mb-3 gap-2">
+              <h3 className="font-semibold text-stone-800">食材清单（可直接调整含量）</h3>
+              <button
+                type="button"
+                onClick={() => setShowSmartParser(true)}
+                className="text-xs font-semibold text-violet-700 bg-violet-50 border border-violet-200 px-2.5 py-1 rounded-full hover:bg-violet-100 flex items-center gap-1 shrink-0 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5" /> 智能识别
+              </button>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-stone-500 text-sm">食材与补剂</span>
-              <span className="font-bold text-stone-800">
-                {parsedPreviewIngredients.filter((i) => i.weight > 0).length} 种食材 ·{' '}
-                {parsedPreviewSupplements.filter((s) => s.amount > 0).length} 种补剂
-              </span>
-            </div>
-            {previewCalc && (
-              <div className="flex justify-between items-center">
-                <span className="text-stone-500 text-sm">钙磷比 / 总热量</span>
-                <span className="font-bold text-stone-800">
-                  {previewCalc.caPRatio.toFixed(2)}:1 · {Math.round(previewCalc.totalKcal)} kcal
+            {mode === 'by_inventory' && (
+              <div className="mb-3 px-3 py-2 rounded-xl bg-sky-50 border border-sky-200/80 flex items-center flex-wrap gap-2 text-[11px] text-sky-900">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 font-bold border border-sky-200">
+                  🧊 冰箱库存
                 </span>
+                <span className="text-stone-500">来自冰箱可用库存</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 font-bold border border-orange-200">
+                  🛒 需补购
+                </span>
+                <span className="text-stone-500">需额外采购补充</span>
+              </div>
+            )}
+            <div className="space-y-3">
+              {previewIngredients.map((item, idx) => {
+                const meat = MEAT_DATABASE.find((m) => m.id === item.meatId);
+                if (!meat) return null;
+                const roleInfo = ROLE_META[meat.role] || ROLE_META.red_meat;
+                const confidence = getConfidenceBadgeInfo(meat);
+                const weightNum = typeof item.weight === 'string' ? parseFloat(item.weight) || 0 : item.weight;
+                const fridgeStockG = Math.round(fridgeStockMap[item.meatId] || 0);
+                const isFromFridge = mode === 'by_inventory' && fridgeStockG > 0;
+                const needBuyG = mode === 'by_inventory' ? Math.max(0, Math.round(weightNum - fridgeStockG)) : 0;
+
+                return (
+                  <div
+                    key={`step4-ing-${item.meatId}-${idx}`}
+                    className="flex justify-between items-center py-2 border-b border-stone-50 last:border-0 gap-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {mode === 'by_inventory' && isFromFridge && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 font-bold shrink-0">
+                            🧊 冰箱 {fridgeStockG}g
+                          </span>
+                        )}
+                        {mode === 'by_inventory' && !isFromFridge && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold shrink-0">
+                            🛒 需补购
+                          </span>
+                        )}
+                        {mode === 'by_inventory' && isFromFridge && needBuyG > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-bold shrink-0">
+                            🛒 补买{needBuyG}g
+                          </span>
+                        )}
+                        <p className="font-medium text-stone-800 text-sm truncate">{meat.name}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <span className="text-xs text-stone-500">{roleInfo.label}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded ${confidence.className}`}>
+                          {confidence.shortLabel}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.weight}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPreviewIngredients((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], weight: val };
+                            return next;
+                          });
+                        }}
+                        className="w-16 px-2 py-1 text-right border border-stone-200 rounded focus:outline-none focus:border-[#FF7B4A] text-sm"
+                        placeholder="重量"
+                      />
+                      <span className="text-xs text-stone-500">g</span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenReplaceIngredient(idx, meat.role)}
+                        className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                        title="替换食材"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveIngredient(idx)}
+                        className="p-1 text-red-500 hover:bg-red-50 rounded"
+                        title="移除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                onClick={handleOpenAddIngredient}
+                className="w-full py-2 border-2 border-dashed border-stone-200 rounded-xl text-stone-500 hover:border-[#FF7B4A] hover:text-[#FF7B4A] transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" /> 添加食材
+              </button>
+            </div>
+          </div>
+
+          {/* 营养补剂清单（编辑态） */}
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
+            <div className="flex justify-between items-center mb-3 gap-2">
+              <h3 className="font-semibold text-stone-800">营养补剂清单</h3>
+              <button
+                type="button"
+                onClick={handleAutoRecalcPreviewSupplements}
+                className="text-xs text-[#FF7B4A] bg-[#FFFAF5] font-medium border border-orange-200 px-2.5 py-1 hover:bg-orange-50 rounded-lg flex items-center gap-1 shrink-0 transition-colors"
+              >
+                <Activity className="w-3 h-3" /> 智能重算补剂
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {previewSupplements.length > 0 ? (
+                previewSupplements.map((item, idx) => {
+                  const supp = SUPPLEMENTS.find((s) => s.id === item.supplementId);
+                  if (!supp) return null;
+
+                  return (
+                    <div
+                      key={`step4-supp-${item.supplementId}-${idx}`}
+                      className="flex justify-between items-center py-2 border-b border-stone-50 last:border-0 gap-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-stone-800 text-sm truncate">{supp.name}</p>
+                        <span className="text-[11px] text-stone-500">
+                          {supp.category} · {supp.unit_label}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.amount}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setPreviewSupplements((prev) => {
+                              const next = [...prev];
+                              next[idx] = { ...next[idx], amount: val };
+                              return next;
+                            });
+                          }}
+                          className="w-16 px-2 py-1 text-right border border-stone-200 rounded focus:outline-none focus:border-[#FF7B4A] text-sm"
+                          placeholder="用量"
+                        />
+                        <span className="text-xs text-stone-500 w-5">{supp.unit}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReplaceSupplement(idx)}
+                          className="p-1 text-blue-500 hover:bg-blue-50 rounded"
+                          title="替换补剂"
+                        >
+                          <RefreshCw className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSupplement(idx)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded"
+                          title="移除"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-stone-400 text-center py-2">暂未添加营养补剂</p>
+              )}
+
+              <button
+                type="button"
+                onClick={handleOpenAddSupplement}
+                className="w-full py-2 border-2 border-dashed border-stone-200 rounded-xl text-stone-500 hover:border-[#FF7B4A] hover:text-[#FF7B4A] transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" /> 添加营养补剂
+              </button>
+            </div>
+
+            {(previewCalc.hasUnquantifiedFishOilVE ||
+              previewCalc.hasSyntheticVEReminder ||
+              previewCalc.hasBComplexCholineNote) && (
+              <div className="mt-3 pt-3 border-t border-stone-100 space-y-1 text-[11px] text-stone-500">
+                {previewCalc.hasUnquantifiedFishOilVE && (
+                  <p>• 提示：鱼油含混合生育酚抗氧化但未定量，VE 未计入营养汇总。</p>
+                )}
+                {previewCalc.hasSyntheticVEReminder && (
+                  <p>• 提示：双鲸 VE 请核对天然/合成形式（合成 dl-α-生育酚乙酸酯按 α-生育酚当量需 ×0.45 折算）。</p>
+                )}
+                {previewCalc.hasBComplexCholineNote && (
+                  <p>• 提示：复合维 B 已优先补齐 VB1 并同步累加按 41.1% 折算的元素胆碱。</p>
+                )}
               </div>
             )}
           </div>
@@ -1648,7 +2236,7 @@ function CreateOrEditRecipe() {
       {/* 固定在底部导航栏上方，避免被 h-14 导航栏遮挡 */}
       <div className="fixed bottom-14 left-0 w-full bg-white/95 backdrop-blur-md border-t border-stone-100 px-4 py-3 flex justify-center z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.04)]">
         <div className="max-w-md w-full px-1 flex gap-3">
-          {step > 1 && step < 4 && (
+          {step > 1 && (
             <button
               onClick={() => setStep(step - 1)}
               className="px-6 py-3 rounded-2xl font-bold transition-colors bg-stone-100 text-stone-600 hover:bg-stone-200"
@@ -1662,24 +2250,27 @@ function CreateOrEditRecipe() {
               onClick={handleNextStep}
               className="flex-1 bg-[#FF7B4A] text-white px-4 py-3 rounded-2xl font-bold shadow-md hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
             >
-              下一步 <ChevronRight className="w-4 h-4" />
+              {step === 3 ? '营养达标检查' : '下一步'} <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
             <button
               onClick={handleSave}
               className="flex-1 bg-[#FF7B4A] text-white px-4 py-3 rounded-2xl font-bold shadow-md shadow-orange-500/30 hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
             >
-              进入配方详情 <ChevronRight className="w-4 h-4" />
+              保存食谱 <Check className="w-4 h-4" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Step 3 食材/补剂选择弹窗 */}
+      {/* Step 3 & Step 4 食材/补剂选择弹窗 */}
       <IngredientPickerModal
         isOpen={showIngredientPicker}
         onClose={() => setShowIngredientPicker(false)}
         isReplacing={replacingIngredientIdx !== null}
+        existingMeatIds={previewIngredients
+          .filter((_, idx) => idx !== replacingIngredientIdx)
+          .map((i) => i.meatId)}
         initialSelectedIds={pickerInitialMeatIds}
         initialRoleFilter={pickerInitialRole}
         onConfirm={handleConfirmIngredientPicker}
@@ -1689,10 +2280,133 @@ function CreateOrEditRecipe() {
         isOpen={showSupplementPicker}
         onClose={() => setShowSupplementPicker(false)}
         isReplacing={replacingSupplementIdx !== null}
-        existingSupplementIds={previewSupplements.map((s) => s.supplementId)}
+        existingSupplementIds={previewSupplements
+          .filter((_, idx) => idx !== replacingSupplementIdx)
+          .map((s) => s.supplementId)}
         initialSelectedIds={pickerInitialSuppIds}
         onConfirm={handleConfirmSupplementPicker}
       />
+
+      <SmartIngredientParseModal
+        isOpen={showSmartParser}
+        onClose={() => setShowSmartParser(false)}
+        onApply={handleApplySmartParse}
+      />
+
+      {/* 未保存食谱返回提醒弹窗 */}
+      {showUnsavedLeaveModal && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setShowUnsavedLeaveModal(false)}
+        >
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-stone-900 mb-2">未保存食谱</h3>
+            <p className="text-sm text-stone-600 mb-6">未保存食谱，确认返回吗？当前编辑内容将会丢失。</p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowUnsavedLeaveModal(false)}
+                className="px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+              >
+                继续编辑
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUnsavedLeaveModal(false);
+                  setUnsavedRecipeGuard(false);
+                  navigate('/recipes');
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors"
+              >
+                确认返回
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 4 全部 28 项营养明细弹窗 */}
+      {showFullNutritionModal && previewCalc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setShowFullNutritionModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-md max-h-[84vh] shadow-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center p-4 border-b border-stone-100 shrink-0">
+              <div>
+                <h3 className="text-base font-bold text-stone-900">
+                  全部营养素分析 ({standard === 'NRC' ? 'NRC 2006' : 'AAFCO 2016/2026'} · {lifeStage === 'kitten' ? '幼猫' : '成猫'})
+                </h3>
+                <p className="text-[11px] text-stone-400 mt-0.5">
+                  按每 1,000 kcal ME 统一折算 · 食谱总热量 {Math.round(previewCalc.totalKcal)} kcal
+                </p>
+              </div>
+              <button onClick={() => setShowFullNutritionModal(false)} className="text-stone-400 hover:text-stone-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 space-y-5">
+              {previewCalc.hasMissingData && (
+                <div className="text-xs text-stone-500 bg-stone-50 border border-stone-200/70 rounded-xl px-3 py-2 flex items-center gap-2">
+                  <Info className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                  <span>含未检测项，不代表为 0（标有 * 的营养素在部分食材中未报告，汇总已跳过）。</span>
+                </div>
+              )}
+
+              {Object.entries(previewGroupedFullEvaluations).map(([group, items]) => (
+                <div key={group}>
+                  <h4 className="font-bold text-stone-800 mb-2 text-sm bg-stone-50 px-2.5 py-1.5 rounded-lg">
+                    {group}
+                  </h4>
+                  <table className="w-full text-xs text-left">
+                    <thead className="text-[11px] text-stone-500 border-b border-stone-100">
+                      <tr>
+                        <th className="py-2 font-medium">营养素</th>
+                        <th className="py-2 font-medium">每1000kcal</th>
+                        <th className="py-2 font-medium">标准范围</th>
+                        <th className="py-2 font-medium text-center">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-50">
+                      {items.map((ev) => (
+                        <tr key={ev.key}>
+                          <td className="py-2.5 text-stone-800 font-medium pr-1">
+                            {ev.label}
+                            {ev.hasMissingSource && (
+                              <span className="text-stone-400 ml-0.5" title="部分食材未报告此项">
+                                *
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 text-stone-700 whitespace-nowrap pr-1">
+                            <div className="font-medium">
+                              {ev.per1000kcal.toFixed(ev.decimals)} {ev.unit}
+                            </div>
+                            {ev.key !== 'ca_p_ratio' && (
+                              <div className="text-[10px] text-stone-400">
+                                整份 {ev.totalAmount.toFixed(ev.decimals)} {ev.unit}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2.5 text-stone-500 text-[11px] pr-1">{formatBoundsText(ev)}</td>
+                          <td className="py-2.5 text-center">
+                            <TrafficLightBadge ev={ev} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1756,12 +2470,32 @@ function RecipeDetail() {
   const [showSupplementPicker, setShowSupplementPicker] = useState(false);
   const [replacingSupplementIndex, setReplacingSupplementIndex] = useState<number | null>(null);
   const [pickerInitialSuppIds, setPickerInitialSuppIds] = useState<string[]>([]);
+  const [showSmartParser, setShowSmartParser] = useState(false);
+  const [unsavedConfirmMode, setUnsavedConfirmMode] = useState<'none' | 'navigate' | 'cancel_edit'>('none');
+  const [execReturnNotice, setExecReturnNotice] = useState('');
+  const execReturnTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (recipe) {
       setActiveStandard(recipe.standard || 'NRC');
     }
   }, [recipe?.id]);
+
+  useEffect(() => {
+    setUnsavedRecipeGuard(isEditingRecipe, '未保存食谱，确认返回？当前修改将会丢失。');
+    return () => {
+      setUnsavedRecipeGuard(false);
+    };
+  }, [isEditingRecipe]);
+
+  useEffect(() => {
+    return () => {
+      if (execReturnTimerRef.current) {
+        window.clearTimeout(execReturnTimerRef.current);
+        execReturnTimerRef.current = null;
+      }
+    };
+  }, []);
 
   if (!recipe) return <div className="p-6 text-center text-stone-500">未找到该食谱</div>;
 
@@ -1812,8 +2546,32 @@ function RecipeDetail() {
     setIsEditingRecipe(true);
   };
 
+  const hasUnsavedRecipeEdits = () => {
+    if (!isEditingRecipe) return false;
+    const normIng = (arr: Array<{ meatId: string; weight: number | string }>) =>
+      JSON.stringify(arr.map((i) => ({ meatId: i.meatId, weight: Number(i.weight) || 0 })));
+    const normSupp = (arr: Array<{ supplementId: string; amount: number | string }>) =>
+      JSON.stringify(arr.map((s) => ({ supplementId: s.supplementId, amount: Number(s.amount) || 0 })));
+    return (
+      normIng(editedIngredients) !== normIng(recipe.ingredients) ||
+      normSupp(editedSupplements) !== normSupp(recipe.supplements)
+    );
+  };
+
   const handleCancelEditRecipe = () => {
-    setIsEditingRecipe(false);
+    if (hasUnsavedRecipeEdits()) {
+      setUnsavedConfirmMode('cancel_edit');
+    } else {
+      setIsEditingRecipe(false);
+    }
+  };
+
+  const handleBackToRecipes = () => {
+    if (isEditingRecipe) {
+      setUnsavedConfirmMode('navigate');
+      return;
+    }
+    navigate('/recipes');
   };
 
   const handleSaveRecipe = () => {
@@ -1838,6 +2596,7 @@ function RecipeDetail() {
     recipe.lifeStage = activeLifeStage;
 
     saveRecipes();
+    setUnsavedRecipeGuard(false);
     setForceRender((prev) => prev + 1);
     setIsEditingRecipe(false);
   };
@@ -1881,6 +2640,23 @@ function RecipeDetail() {
       setEditedIngredients([...editedIngredients, ...newIngredients]);
     }
     setShowIngredientPicker(false);
+  };
+
+  const handleApplySmartParseDetail = (matchedItems: ParsedNaturalIngredientItem[]) => {
+    setEditedIngredients((prev) => {
+      const next = [...prev];
+      matchedItems.forEach((item) => {
+        const idx = next.findIndex((x) => x.meatId === item.meatId);
+        if (idx !== -1) {
+          const curW = typeof next[idx].weight === 'string' ? parseFloat(next[idx].weight) || 0 : next[idx].weight;
+          next[idx] = { ...next[idx], weight: item.weight > 0 ? item.weight : curW };
+        } else {
+          next.push({ meatId: item.meatId, weight: item.weight });
+        }
+      });
+      return next;
+    });
+    setShowSmartParser(false);
   };
 
   const currentIngredients = isEditingRecipe ? editedIngredients : recipe.ingredients;
@@ -2009,8 +2785,14 @@ function RecipeDetail() {
   }, {} as Record<string, NutrientEvaluation[]>);
 
   const handleToggleActive = () => {
+    if (execReturnTimerRef.current) {
+      window.clearTimeout(execReturnTimerRef.current);
+      execReturnTimerRef.current = null;
+    }
+
     const now = new Date().toISOString();
-    if (!recipe.isActive) {
+    const starting = !recipe.isActive;
+    if (starting) {
       MOCK_RECIPES.forEach((r) => {
         if (r.isActive) {
           r.isActive = false;
@@ -2026,15 +2808,29 @@ function RecipeDetail() {
     }
     saveRecipes();
     setForceRender((prev) => prev + 1);
+
+    if (starting) {
+      setExecReturnNotice('已开始执行，3 秒后自动返回食谱管理页...');
+      execReturnTimerRef.current = window.setTimeout(() => {
+        execReturnTimerRef.current = null;
+        navigate('/recipes');
+      }, 3000);
+    } else {
+      setExecReturnNotice('');
+    }
   };
 
   return (
     <div className="p-4 space-y-4 bg-stone-50 min-h-full pb-24">
       <header className="mb-6 flex items-center justify-between relative">
         <div className="flex items-center gap-2">
-          <Link to="/recipes" className="text-stone-500 hover:text-stone-700">
+          <button
+            type="button"
+            onClick={handleBackToRecipes}
+            className="text-stone-500 hover:text-stone-700"
+          >
             <ChevronRight className="w-6 h-6 rotate-180" />
-          </Link>
+          </button>
           <h1 className="text-2xl font-bold text-stone-900">食谱详情</h1>
         </div>
         <div className="relative">
@@ -2133,6 +2929,53 @@ function RecipeDetail() {
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors"
               >
                 确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {execReturnNotice && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[75] bg-stone-900 text-white text-xs font-medium px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 whitespace-nowrap">
+          <Activity className="w-3.5 h-3.5 text-[#FF7B4A]" />
+          <span>{execReturnNotice}</span>
+        </div>
+      )}
+
+      {unsavedConfirmMode !== 'none' && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setUnsavedConfirmMode('none')}
+        >
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-stone-900 mb-2">未保存食谱</h3>
+            <p className="text-sm text-stone-600 mb-6">
+              {unsavedConfirmMode === 'navigate'
+                ? '未保存食谱，确认返回？当前修改将会丢失。'
+                : '未保存食谱，确认放弃本次修改吗？'}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setUnsavedConfirmMode('none')}
+                className="px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 rounded-xl transition-colors"
+              >
+                继续编辑
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const action = unsavedConfirmMode;
+                  setUnsavedConfirmMode('none');
+                  setUnsavedRecipeGuard(false);
+                  setIsEditingRecipe(false);
+                  if (action === 'navigate') {
+                    navigate('/recipes');
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors"
+              >
+                确认返回
               </button>
             </div>
           </div>
@@ -2439,10 +3282,25 @@ function RecipeDetail() {
         onConfirm={handleConfirmPicker}
       />
 
+      <SmartIngredientParseModal
+        isOpen={showSmartParser}
+        onClose={() => setShowSmartParser(false)}
+        onApply={handleApplySmartParseDetail}
+      />
+
       {/* 食材清单 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-4 gap-2">
           <h3 className="font-semibold text-stone-800">食材清单</h3>
+          {isEditingRecipe && (
+            <button
+              type="button"
+              onClick={() => setShowSmartParser(true)}
+              className="text-xs font-semibold text-violet-700 bg-violet-50 border border-violet-200 px-2.5 py-1 rounded-full hover:bg-violet-100 flex items-center gap-1 shrink-0 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> 智能识别
+            </button>
+          )}
         </div>
 
         {isEditingRecipe ? (

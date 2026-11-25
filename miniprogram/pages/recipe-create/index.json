@@ -1,3 +1,4 @@
 {
-  "navigationBarTitleText": "新建专属食谱"
+  "navigationBarTitleText": "新建专属食谱",
+  "navigationStyle": "custom"
 }
