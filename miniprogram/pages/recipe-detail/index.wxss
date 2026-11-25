@@ -128,54 +128,98 @@
   margin-bottom: 6rpx;
 }
 
-.role-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14rpx;
-}
-
-.role-chip {
-  width: calc(50% - 7rpx);
-  background-color: #F9F7F4;
-  border-radius: 20rpx;
-  padding: 16rpx;
+.pie-layout {
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 28rpx;
+  padding-top: 8rpx;
 }
 
-.role-chip-icon {
-  font-size: 32rpx;
+.pie-ring {
+  width: 224rpx;
+  height: 224rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
 }
 
-.role-chip-body {
-  flex: 1;
+.pie-hole {
+  width: 132rpx;
+  height: 132rpx;
+  border-radius: 999rpx;
+  background-color: #FFFFFF;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rpx;
 }
 
-.role-chip-name {
-  font-size: 23rpx;
-  color: #44403C;
-  font-weight: 600;
-}
-
-.role-chip-pct {
-  font-size: 23rpx;
+.pie-center-val {
+  font-size: 26rpx;
   font-weight: 800;
-  color: #FF7B4A;
+  color: #292524;
 }
 
-.role-track {
-  height: 10rpx;
-  background-color: #E7E5E4;
-  border-radius: 999rpx;
-  margin-top: 8rpx;
-  overflow: hidden;
+.pie-center-sub {
+  font-size: 19rpx;
+  color: #78716C;
 }
 
-.role-fill {
-  height: 100%;
-  background-color: #FF7B4A;
-  border-radius: 999rpx;
+.pie-legend {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.pie-legend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10rpx;
+}
+
+.pie-legend-left {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+}
+
+.pie-dot {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 6rpx;
+  flex-shrink: 0;
+}
+
+.pie-legend-name {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #44403C;
+}
+
+.pie-legend-right {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+  flex-shrink: 0;
+}
+
+.pie-legend-pct {
+  font-size: 25rpx;
+  font-weight: 800;
+  color: #292524;
+}
+
+.pie-legend-g {
+  font-size: 21rpx;
+  color: #78716C;
 }
 
 .view-item {
@@ -482,8 +526,120 @@
   gap: 4rpx;
 }
 
+.std-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.stage-auto-tag {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #57534E;
+  background-color: #F5F5F4;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+}
+
+.unqualified-banner {
+  background-color: #FEF2F2;
+  border: 1rpx solid #FECACA;
+  border-radius: 18rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 14rpx;
+}
+
+.unqualified-banner-title {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #DC2626;
+}
+
+.qualified-banner {
+  background-color: #ECFDF5;
+  border: 1rpx solid #A7F3D0;
+  border-radius: 18rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 14rpx;
+}
+
+.qualified-banner-title {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #059669;
+}
+
+.eval-row-red {
+  background-color: #FFF5F5;
+  padding-left: 14rpx;
+  padding-right: 14rpx;
+  border-radius: 14rpx;
+  margin-bottom: 6rpx;
+  border-bottom-color: transparent;
+}
+
+.eval-row-yellow {
+  background-color: #FFFBEB;
+  padding-left: 14rpx;
+  padding-right: 14rpx;
+  border-radius: 14rpx;
+  margin-bottom: 6rpx;
+  border-bottom-color: transparent;
+}
+
+.eval-val-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2rpx;
+}
+
+.eval-per-unit {
+  font-size: 20rpx;
+  font-weight: 500;
+  color: #78716C;
+  margin-left: 2rpx;
+}
+
+.eval-total-sub {
+  font-size: 20rpx;
+  color: #78716C;
+}
+
 .picker-name {
   font-size: 27rpx;
   font-weight: 600;
   color: #292524;
+}
+
+.picker-item-disabled {
+  opacity: 0.48;
+}
+
+.role-filter-scroll {
+  display: flex;
+  white-space: nowrap;
+  margin-bottom: 16rpx;
+  height: 64rpx;
+}
+
+.role-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 22rpx;
+  height: 56rpx;
+  margin-right: 12rpx;
+  border-radius: 999rpx;
+  background-color: #F5F5F4;
+  color: #57534E;
+  font-size: 23rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.role-filter-chip-active {
+  background-color: #FF7B4A;
+  color: #FFFFFF;
 }

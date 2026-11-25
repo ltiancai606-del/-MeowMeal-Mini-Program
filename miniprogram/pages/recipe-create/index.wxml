@@ -88,19 +88,19 @@
           <text class="sub-label">计划制作天数</text>
           <text class="val-highlight">{{days}} 天</text>
         </view>
-        <slider min="3" max="30" step="1" value="{{days}}" activeColor="#FF7B4A" bindchange="onDaysChange" />
+        <slider min="1" max="60" step="1" value="{{days}}" activeColor="#FF7B4A" bindchange="onDaysChange" />
       </view>
 
       <view class="slider-row">
         <view class="row-between">
-          <text class="sub-label">单只猫咪每日熟自制生重</text>
+          <text class="sub-label">单日总喂量（{{selectedCatCount > 1 ? selectedCatCount + '只猫合计' : '每日生重'}}）</text>
           <text class="val-highlight">{{dailyGrams}} g / 天</text>
         </view>
-        <slider min="80" max="300" step="10" value="{{dailyGrams}}" activeColor="#FF7B4A" bindchange="onDailyGramsChange" />
+        <slider min="50" max="600" step="10" value="{{dailyGrams}}" activeColor="#FF7B4A" bindchange="onDailyGramsChange" />
       </view>
 
       <view class="target-summary">
-        <text class="muted">本批次建议肉类总重（{{selectedCatCount}} 只猫 × {{days}} 天）：</text>
+        <text class="muted">本批次生鲜肉类总重（{{days}} 天 × {{dailyGrams}}g/天）：</text>
         <text class="target-num">{{targetTotalWeight}} g</text>
       </view>
     </view>
@@ -220,21 +220,6 @@
           <text class="del-btn" data-index="{{index}}" bindtap="onRemoveSupplement">删除</text>
         </view>
 
-        <!-- 同类品牌快捷切换（自动重算用量） -->
-        <view wx:if="{{item.alternatives.length > 1}}" class="brand-pills">
-          <view
-            wx:for="{{item.alternatives}}"
-            wx:for-item="alt"
-            wx:key="id"
-            class="brand-pill {{alt.id === item.supplementId ? 'brand-pill-active' : ''}}"
-            data-index="{{index}}"
-            data-suppid="{{alt.id}}"
-            bindtap="onSwitchSuppBrand"
-          >
-            {{alt.shortName}}
-          </view>
-        </view>
-
         <view class="weight-ctrl">
           <view class="weight-input-wrap full-input">
             <input
@@ -332,11 +317,22 @@
           bindinput="onIngPickerSearch"
         />
       </view>
+      <scroll-view class="role-filter-scroll" scroll-x="true" enable-flex="true">
+        <view
+          wx:for="{{roleFilterTabs}}"
+          wx:key="id"
+          class="role-filter-chip {{ingPickerRole === item.id ? 'role-filter-chip-active' : ''}}"
+          data-role="{{item.id}}"
+          bindtap="onSelectIngPickerRole"
+        >
+          {{item.icon}} {{item.name}}
+        </view>
+      </scroll-view>
       <scroll-view class="modal-scroll" scroll-y="true">
         <view
           wx:for="{{pickerIngredients}}"
           wx:key="id"
-          class="picker-item"
+          class="picker-item {{item.alreadyAdded ? 'picker-item-disabled' : ''}}"
           data-id="{{item.id}}"
           bindtap="onSelectPickerIngredient"
         >
@@ -345,7 +341,8 @@
             <text class="picker-name">{{item.name}}</text>
             <text class="muted-sm">{{item.category}} · {{item.roleLabel}}</text>
           </view>
-          <text class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
+          <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
+          <text wx:else class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
         </view>
       </scroll-view>
     </view>
@@ -360,9 +357,9 @@
       </view>
       <scroll-view class="modal-scroll" scroll-y="true">
         <view
-          wx:for="{{allSupplements}}"
+          wx:for="{{pickerSupplements}}"
           wx:key="id"
-          class="picker-item"
+          class="picker-item {{item.alreadyAdded ? 'picker-item-disabled' : ''}}"
           data-id="{{item.id}}"
           bindtap="onSelectPickerSupplement"
         >
@@ -371,7 +368,8 @@
             <text class="picker-name">{{item.name}}</text>
             <text class="muted-sm">{{item.category}} · {{item.unit_label}}</text>
           </view>
-          <text class="badge badge-orange">选用</text>
+          <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
+          <text wx:else class="badge badge-orange">选用</text>
         </view>
       </scroll-view>
     </view>

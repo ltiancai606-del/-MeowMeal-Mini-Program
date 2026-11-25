@@ -48,14 +48,17 @@ Page({
     },
 
     // 选择器状态
+    roleFilterTabs: engine.ROLE_FILTER_TABS,
     showIngPicker: false,
     pickerIngIndex: -1,
     ingPickerKeyword: '',
+    ingPickerRole: 'all',
+    preferredReplaceRole: '',
     pickerIngredients: [],
 
     showSuppPicker: false,
     pickerSuppIndex: -1,
-    allSupplements: engine.SUPPLEMENTS_DB,
+    pickerSupplements: [],
   },
 
   onLoad() {
@@ -97,7 +100,7 @@ Page({
   },
 
   updateTargetWeight() {
-    const target = Math.max(1, this.data.selectedCatCount) * this.data.days * this.data.dailyGrams;
+    const target = this.data.days * this.data.dailyGrams;
     this.setData({ targetTotalWeight: target });
   },
 
@@ -203,12 +206,6 @@ Page({
 
     const supplementRows = supplements.map((item) => {
       const supp = engine.getSupplementById(item.supplementId);
-      const alternatives = supp
-        ? engine.SUPPLEMENTS_DB.filter((s) => s.type === supp.type).map((s) => ({
-            id: s.id,
-            shortName: s.name.split('（')[0].split('(')[0].slice(0, 14),
-          }))
-        : [];
       return {
         supplementId: item.supplementId,
         amount: item.amount,
@@ -216,7 +213,6 @@ Page({
         category: supp ? supp.category : '补剂',
         unit: supp ? supp.unit : '',
         unitLabel: supp ? supp.unit_label : '',
-        alternatives,
       };
     });
 
@@ -313,16 +309,42 @@ Page({
   },
 
   onOpenAddIngredient() {
-    this.setData({ showIngPicker: true, pickerIngIndex: -1, ingPickerKeyword: '' }, () => {
-      this.refreshIngPicker();
-    });
+    this.setData(
+      {
+        showIngPicker: true,
+        pickerIngIndex: -1,
+        ingPickerKeyword: '',
+        ingPickerRole: 'all',
+        preferredReplaceRole: '',
+      },
+      () => {
+        this.refreshIngPicker();
+      }
+    );
   },
 
   onOpenReplaceIngredient(e) {
     const index = Number(e.currentTarget.dataset.index);
-    this.setData({ showIngPicker: true, pickerIngIndex: index, ingPickerKeyword: '' }, () => {
-      this.refreshIngPicker();
-    });
+    const currentItem = this.data.ingredients[index];
+    const currentIng = currentItem ? engine.getIngredientById(currentItem.meatId) : null;
+    const role = currentIng && currentIng.role ? currentIng.role : 'all';
+    this.setData(
+      {
+        showIngPicker: true,
+        pickerIngIndex: index,
+        ingPickerKeyword: '',
+        ingPickerRole: role,
+        preferredReplaceRole: role,
+      },
+      () => {
+        this.refreshIngPicker();
+      }
+    );
+  },
+
+  onSelectIngPickerRole(e) {
+    const role = e.currentTarget.dataset.role || 'all';
+    this.setData({ ingPickerRole: role }, () => this.refreshIngPicker());
   },
 
   onIngPickerSearch(e) {
@@ -331,13 +353,39 @@ Page({
 
   refreshIngPicker() {
     const kw = (this.data.ingPickerKeyword || '').trim().toLowerCase();
-    const list = engine.INGREDIENTS_DB.filter((ing) => {
+    const roleFilter = this.data.ingPickerRole || 'all';
+    const preferredRole = this.data.preferredReplaceRole || '';
+    const replaceIdx = this.data.pickerIngIndex;
+
+    const existingIds = {};
+    this.data.ingredients.forEach((item, idx) => {
+      if (idx !== replaceIdx) existingIds[item.meatId] = true;
+    });
+
+    const filtered = engine.INGREDIENTS_DB.filter((ing) => {
+      if (roleFilter !== 'all' && ing.role !== roleFilter) return false;
       if (!kw) return true;
       return (
         ing.name.toLowerCase().indexOf(kw) !== -1 ||
         (ing.category || '').toLowerCase().indexOf(kw) !== -1
       );
-    }).slice(0, 60).map((ing) => {
+    });
+
+    filtered.sort((a, b) => {
+      if (preferredRole) {
+        const aSame = a.role === preferredRole ? 0 : 1;
+        const bSame = b.role === preferredRole ? 0 : 1;
+        if (aSame !== bSame) return aSame - bSame;
+      }
+      const aUsed = existingIds[a.id] ? 1 : 0;
+      const bUsed = existingIds[b.id] ? 1 : 0;
+      if (aUsed !== bUsed) return aUsed - bUsed;
+      const aProxy = a.is_proxy ? 1 : 0;
+      const bProxy = b.is_proxy ? 1 : 0;
+      return aProxy - bProxy;
+    });
+
+    const list = filtered.map((ing) => {
       const roleMeta = engine.ROLE_META[ing.role] || { label: ing.role, icon: '🥩' };
       const badge = engine.getConfidenceBadgeInfo(ing);
       return {
@@ -348,6 +396,7 @@ Page({
         roleLabel: roleMeta.label,
         badgeClass: badge.badgeClass,
         badgeLabel: badge.shortLabel,
+        alreadyAdded: Boolean(existingIds[ing.id]),
       };
     });
     this.setData({ pickerIngredients: list });
@@ -355,11 +404,18 @@ Page({
 
   onSelectPickerIngredient(e) {
     const meatId = e.currentTarget.dataset.id;
+    const replaceIdx = this.data.pickerIngIndex;
+    const isDup = this.data.ingredients.some((item, idx) => idx !== replaceIdx && item.meatId === meatId);
+    if (isDup) {
+      wx.showToast({ title: '该食材已在食谱中，不可重复添加', icon: 'none' });
+      return;
+    }
+
     const next = this.data.ingredients.slice();
-    if (this.data.pickerIngIndex >= 0) {
-      next[this.data.pickerIngIndex] = Object.assign({}, next[this.data.pickerIngIndex], { meatId });
+    if (replaceIdx >= 0) {
+      next[replaceIdx] = Object.assign({}, next[replaceIdx], { meatId });
     } else {
-      next.push({ meatId, weight: 100 });
+      next.push({ meatId, weight: 0 });
     }
     this.setData({ ingredients: next, showIngPicker: false }, () => this.recomputeLiveView());
   },
@@ -380,30 +436,6 @@ Page({
     this.setData({ supplements: next }, () => this.recomputeLiveView());
   },
 
-  onSwitchSuppBrand(e) {
-    const index = Number(e.currentTarget.dataset.index);
-    const suppId = e.currentTarget.dataset.suppid;
-    const supp = engine.getSupplementById(suppId);
-    if (!supp) return;
-
-    const meatOnly = engine.calculateRecipeNutrition(
-      this.data.ingredients,
-      [],
-      this.data.standard,
-      this.data.lifeStage
-    );
-    const recommended = engine.computeRecommendedAmountForSupplement(
-      supp,
-      meatOnly,
-      this.data.standard,
-      this.data.lifeStage
-    );
-
-    const next = this.data.supplements.slice();
-    next[index] = { supplementId: suppId, amount: recommended };
-    this.setData({ supplements: next }, () => this.recomputeLiveView());
-  },
-
   onRecalcSupplements() {
     const recommended = engine.recommendSupplements(
       this.data.ingredients,
@@ -417,17 +449,39 @@ Page({
     });
   },
 
+  refreshSuppPicker(replaceIdx) {
+    const existingIds = {};
+    this.data.supplements.forEach((s, idx) => {
+      if (idx !== replaceIdx) existingIds[s.supplementId] = true;
+    });
+    const pickerSupplements = engine.SUPPLEMENTS_DB.map((s) =>
+      Object.assign({}, s, { alreadyAdded: Boolean(existingIds[s.id]) })
+    );
+    this.setData({ pickerSupplements });
+  },
+
   onOpenAddSupplement() {
-    this.setData({ showSuppPicker: true, pickerSuppIndex: -1 });
+    this.setData({ showSuppPicker: true, pickerSuppIndex: -1 }, () => {
+      this.refreshSuppPicker(-1);
+    });
   },
 
   onOpenReplaceSupplement(e) {
     const index = Number(e.currentTarget.dataset.index);
-    this.setData({ showSuppPicker: true, pickerSuppIndex: index });
+    this.setData({ showSuppPicker: true, pickerSuppIndex: index }, () => {
+      this.refreshSuppPicker(index);
+    });
   },
 
   onSelectPickerSupplement(e) {
     const suppId = e.currentTarget.dataset.id;
+    const replaceIdx = this.data.pickerSuppIndex;
+    const isDup = this.data.supplements.some((s, idx) => idx !== replaceIdx && s.supplementId === suppId);
+    if (isDup) {
+      wx.showToast({ title: '该补剂已在列表中', icon: 'none' });
+      return;
+    }
+
     const supp = engine.getSupplementById(suppId);
     if (!supp) return;
 
@@ -445,10 +499,10 @@ Page({
     );
 
     const next = this.data.supplements.slice();
-    if (this.data.pickerSuppIndex >= 0) {
-      next[this.data.pickerSuppIndex] = { supplementId: suppId, amount: recommended || 1 };
+    if (replaceIdx >= 0) {
+      next[replaceIdx] = { supplementId: suppId, amount: recommended };
     } else {
-      next.push({ supplementId: suppId, amount: recommended || 1 });
+      next.push({ supplementId: suppId, amount: recommended });
     }
     this.setData({ supplements: next, showSuppPicker: false }, () => this.recomputeLiveView());
   },

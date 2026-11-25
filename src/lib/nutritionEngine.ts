@@ -230,10 +230,10 @@ function mapUnitShort(unitBasis: string): string {
 }
 
 function extractBrand(name: string): string {
-  if (name.startsWith('NOW')) return 'NOW Foods';
-  if (name.startsWith('Viva')) return 'Viva Naturals';
-  if (name.startsWith('NaturesPlus')) return 'NaturesPlus';
-  if (name.startsWith('Thompson')) return 'Thompson';
+  if (name.includes('诺奥') || name.startsWith('NOW')) return '诺奥';
+  if (name.includes('维瓦') || name.startsWith('Viva')) return '维瓦';
+  if (name.includes('自然之加') || name.startsWith('NaturesPlus')) return '自然之加';
+  if (name.includes('汤普森') || name.startsWith('Thompson')) return '汤普森';
   if (name.includes('双鲸')) return '双鲸';
   return '通用';
 }

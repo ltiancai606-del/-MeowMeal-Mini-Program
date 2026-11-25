@@ -15,18 +15,6 @@
       </view>
     </view>
 
-    <!-- 标准 & 生命阶段快速切换 -->
-    <view class="std-switch-row">
-      <view class="pill-group">
-        <view class="pill-opt {{standard === 'NRC' ? 'pill-opt-active' : ''}}" data-val="NRC" bindtap="onSwitchStandard">NRC 2006</view>
-        <view class="pill-opt {{standard === 'AAFCO' ? 'pill-opt-active' : ''}}" data-val="AAFCO" bindtap="onSwitchStandard">AAFCO</view>
-      </view>
-      <view class="pill-group">
-        <view class="pill-opt {{lifeStage === 'adult' ? 'pill-opt-active' : ''}}" data-val="adult" bindtap="onSwitchLifeStage">成猫</view>
-        <view class="pill-opt {{lifeStage === 'kitten' ? 'pill-opt-active' : ''}}" data-val="kitten" bindtap="onSwitchLifeStage">幼猫</view>
-      </view>
-    </view>
-
     <!-- 关键指标 -->
     <view class="kpi-grid">
       <view class="kpi-cell">
@@ -64,7 +52,7 @@
   <view wx:if="{{summary.highRiskAlerts.length > 0}}" class="alert-danger">
     <view class="alert-head">🚨 高风险超标警报（超过 SUL / Max 上限）</view>
     <view wx:for="{{summary.highRiskAlerts}}" wx:key="key">
-      • {{item.label}}：{{item.per1000kcalText}}（上限 {{item.max}} {{item.unit}}）
+      • {{item.label}}：{{item.per1000kcalText}}/千卡（上限 {{item.max}} {{item.unit}}）
     </view>
   </view>
 
@@ -73,22 +61,28 @@
     ⚠ 近似估算数据，建议优先选用实测肉类：{{summary.proxyNames}}
   </view>
 
-  <!-- 食材结构占比 -->
-  <view wx:if="{{roleBars.length > 0}}" class="card">
+  <!-- 食材结构占比（饼状图） -->
+  <view wx:if="{{roleSlices.length > 0}}" class="card">
     <view class="section-header">
       <text class="section-title">📊 食材结构比例</text>
       <text class="muted-sm">按生鲜克重占比</text>
     </view>
-    <view class="role-grid">
-      <view wx:for="{{roleBars}}" wx:key="role" class="role-chip">
-        <text class="role-chip-icon">{{item.icon}}</text>
-        <view class="role-chip-body">
-          <view class="row-between">
-            <text class="role-chip-name">{{item.label}}</text>
-            <text class="role-chip-pct">{{item.pct}}%</text>
+    <view class="pie-layout">
+      <view class="pie-ring" style="background: {{rolePieGradient}};">
+        <view class="pie-hole">
+          <text class="pie-center-val">{{summary.totalWeightG}}g</text>
+          <text class="pie-center-sub">生鲜总重</text>
+        </view>
+      </view>
+      <view class="pie-legend">
+        <view wx:for="{{roleSlices}}" wx:key="role" class="pie-legend-row">
+          <view class="pie-legend-left">
+            <view class="pie-dot" style="background-color: {{item.color}};"></view>
+            <text class="pie-legend-name">{{item.icon}} {{item.label}}</text>
           </view>
-          <view class="role-track">
-            <view class="role-fill" style="width: {{item.pct}}%;"></view>
+          <view class="pie-legend-right">
+            <text class="pie-legend-pct">{{item.pct}}%</text>
+            <text class="pie-legend-g">{{item.weight}}g</text>
           </view>
         </view>
       </view>
@@ -130,7 +124,7 @@
                 <text class="item-name">{{item.name}}</text>
                 <text class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
               </view>
-              <text class="muted-sm">{{item.roleLabel}} · 点击更换食材</text>
+              <text class="muted-sm">{{item.roleLabel}} · 点击更换同类食材</text>
             </view>
           </view>
           <text class="del-btn" data-index="{{index}}" bindtap="onRemoveIngredient">删除</text>
@@ -153,7 +147,7 @@
     </block>
   </view>
 
-  <!-- 补剂清单（支持查看/编辑+品牌切换+智能重算） -->
+  <!-- 补剂清单（各补剂独立管理，按实际营养成分累加） -->
   <view class="card">
     <view class="section-header">
       <text class="section-title">💊 营养补剂 ({{supplementRows.length}} 项)</text>
@@ -185,24 +179,10 @@
             <text class="row-icon">💊</text>
             <view class="row-info">
               <text class="item-name">{{item.name}}</text>
-              <text class="muted-sm">{{item.category}} · {{item.unitLabel}} · 点击更换</text>
+              <text class="muted-sm">{{item.category}} · {{item.unitLabel}} · 点击更换补剂</text>
             </view>
           </view>
           <text class="del-btn" data-index="{{index}}" bindtap="onRemoveSupplement">删除</text>
-        </view>
-
-        <view wx:if="{{item.alternatives.length > 1}}" class="brand-pills">
-          <view
-            wx:for="{{item.alternatives}}"
-            wx:for-item="alt"
-            wx:key="id"
-            class="brand-pill {{alt.id === item.supplementId ? 'brand-pill-active' : ''}}"
-            data-index="{{index}}"
-            data-suppid="{{alt.id}}"
-            bindtap="onSwitchSuppBrand"
-          >
-            {{alt.shortName}}
-          </view>
         </view>
 
         <view class="weight-ctrl">
@@ -228,14 +208,34 @@
     </view>
   </view>
 
-  <!-- 核心 14 项营养红黄绿灯分析 -->
+  <!-- 营养达标分析（顶部切换营养标准 + 自动判定阶段 + 不合格项统计与置顶） -->
   <view class="card">
     <view class="section-header">
-      <text class="section-title">🚦 核心营养达标分析</text>
+      <text class="section-title">🚦 营养达标分析</text>
       <text class="link-orange" bindtap="onOpenFullNutrients">全部 28 项 ›</text>
     </view>
+
+    <!-- 切换营养标准（NRC / AAFCO） + 自动判定成幼猫阶段 -->
+    <view class="std-bar">
+      <view class="pill-group">
+        <view class="pill-opt {{standard === 'NRC' ? 'pill-opt-active' : ''}}" data-val="NRC" bindtap="onSwitchStandard">NRC 2006</view>
+        <view class="pill-opt {{standard === 'AAFCO' ? 'pill-opt-active' : ''}}" data-val="AAFCO" bindtap="onSwitchStandard">AAFCO</view>
+      </view>
+      <view class="stage-auto-tag">
+        <text>自动判定：{{lifeStageText}}</text>
+      </view>
+    </view>
+
+    <!-- 不合格项总览提示 -->
+    <view wx:if="{{unqualifiedCount > 0}}" class="unqualified-banner">
+      <text class="unqualified-banner-title">⚠ 共 {{unqualifiedCount}} 项未达标（{{unqualifiedDetailText}}），已置顶展示</text>
+    </view>
+    <view wx:else class="qualified-banner">
+      <text class="qualified-banner-title">✓ 全部营养指标均已达标</text>
+    </view>
+
     <view class="muted-sm mb-16">
-      换算基准：每 1,000 kcal ME · 对标 {{standard}} {{lifeStage === 'kitten' ? '幼猫生长期' : '成猫维持期'}}
+      比对基准：每 1,000 kcal 代谢能含量（括号/小字为整份 {{summary.totalWeightG}}g 食谱总含量）
     </view>
 
     <view wx:if="{{summary.hasMissingData}}" class="alert-info mb-16">
@@ -243,19 +243,26 @@
     </view>
 
     <view class="eval-table">
-      <view wx:for="{{coreEvaluations}}" wx:key="key" class="eval-row">
+      <view
+        wx:for="{{displayEvaluations}}"
+        wx:key="key"
+        class="eval-row {{item.status === 'red' ? 'eval-row-red' : item.status === 'yellow' ? 'eval-row-yellow' : ''}}"
+      >
         <view class="eval-left">
           <text class="eval-name">{{item.label}}{{item.hasMissingSource ? ' *' : ''}}</text>
-          <text class="eval-bounds">{{item.boundsText}}</text>
+          <text class="eval-bounds">标准：{{item.boundsText}}{{item.key === 'ca_p_ratio' ? '' : ' /千卡'}}</text>
         </view>
         <view class="eval-right">
-          <text class="eval-val">{{item.per1000kcalText}}</text>
+          <view class="eval-val-col">
+            <text class="eval-val">{{item.per1000kcalText}}<text wx:if="{{item.key !== 'ca_p_ratio'}}" class="eval-per-unit">/千卡</text></text>
+            <text wx:if="{{item.totalAmountText}}" class="eval-total-sub">{{item.totalAmountText}}</text>
+          </view>
           <text class="traffic-dot traffic-{{item.status}}">{{item.statusSymbol}}</text>
         </view>
       </view>
     </view>
 
-    <view class="btn-outline mt-20" bindtap="onOpenFullNutrients">查看全部 28 项营养明细</view>
+    <view class="btn-outline mt-20" bindtap="onOpenFullNutrients">查看全部 28 项营养明细（标准库顺序）</view>
   </view>
 
   <!-- 底部固定操作栏 -->
@@ -273,13 +280,13 @@
     </block>
   </view>
 
-  <!-- 全部 28 项营养详情弹窗 -->
+  <!-- 全部 28 项营养详情弹窗（按标准库顺序展示） -->
   <view wx:if="{{showFullNutrients}}" class="modal-mask" bindtap="onCloseModals">
     <view class="modal-sheet" catchtap="noop">
       <view class="modal-header">
         <view>
           <text class="modal-title">全部 28 项营养分析</text>
-          <view class="muted-sm">每 1,000 kcal ME · {{standard}} ({{lifeStage === 'kitten' ? '幼猫' : '成猫'}})</view>
+          <view class="muted-sm">每 1,000 kcal ME · {{standard}} · {{lifeStageText}}</view>
         </view>
         <view class="modal-close" bindtap="onCloseModals">✕</view>
       </view>
@@ -294,10 +301,13 @@
           <view wx:for="{{item.items}}" wx:for-item="ev" wx:key="key" class="eval-row">
             <view class="eval-left">
               <text class="eval-name">{{ev.label}}{{ev.hasMissingSource ? ' *' : ''}}</text>
-              <text class="eval-bounds">{{ev.boundsText}}</text>
+              <text class="eval-bounds">{{ev.boundsText}}{{ev.key === 'ca_p_ratio' ? '' : ' /千卡'}}</text>
             </view>
             <view class="eval-right">
-              <text class="eval-val">{{ev.per1000kcalText}}</text>
+              <view class="eval-val-col">
+                <text class="eval-val">{{ev.per1000kcalText}}<text wx:if="{{ev.key !== 'ca_p_ratio'}}" class="eval-per-unit">/千卡</text></text>
+                <text wx:if="{{ev.totalAmountText}}" class="eval-total-sub">{{ev.totalAmountText}}</text>
+              </view>
               <text class="traffic-dot traffic-{{ev.status}}">{{ev.statusSymbol}}</text>
             </view>
           </view>
@@ -306,22 +316,33 @@
     </view>
   </view>
 
-  <!-- 食材搜索选择弹窗 -->
+  <!-- 食材搜索选择弹窗（支持同类筛选 + 防重复） -->
   <view wx:if="{{showIngPicker}}" class="modal-mask" bindtap="onCloseModals">
     <view class="modal-sheet" catchtap="noop">
       <view class="modal-header">
-        <text class="modal-title">{{pickerIngIndex >= 0 ? '更换食材' : '添加食材'}}</text>
+        <text class="modal-title">{{pickerIngIndex >= 0 ? '更换食材（优先展示同类）' : '添加食材'}}</text>
         <view class="modal-close" bindtap="onCloseModals">✕</view>
       </view>
       <view class="search-box">
         <text>🔍</text>
         <input class="search-input" placeholder="搜索 176 项食材..." value="{{ingPickerKeyword}}" bindinput="onIngPickerSearch" />
       </view>
+      <scroll-view class="role-filter-scroll" scroll-x="true" enable-flex="true">
+        <view
+          wx:for="{{roleFilterTabs}}"
+          wx:key="id"
+          class="role-filter-chip {{ingPickerRole === item.id ? 'role-filter-chip-active' : ''}}"
+          data-role="{{item.id}}"
+          bindtap="onSelectIngPickerRole"
+        >
+          {{item.icon}} {{item.name}}
+        </view>
+      </scroll-view>
       <scroll-view class="modal-scroll" scroll-y="true">
         <view
           wx:for="{{pickerIngredients}}"
           wx:key="id"
-          class="picker-item"
+          class="picker-item {{item.alreadyAdded ? 'picker-item-disabled' : ''}}"
           data-id="{{item.id}}"
           bindtap="onSelectPickerIngredient"
         >
@@ -330,13 +351,14 @@
             <text class="picker-name">{{item.name}}</text>
             <text class="muted-sm">{{item.category}} · {{item.roleLabel}}</text>
           </view>
-          <text class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
+          <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
+          <text wx:else class="badge {{item.badgeClass}}">{{item.badgeLabel}}</text>
         </view>
       </scroll-view>
     </view>
   </view>
 
-  <!-- 补剂选择弹窗 -->
+  <!-- 补剂选择弹窗（纯中文名称 + 防重复） -->
   <view wx:if="{{showSuppPicker}}" class="modal-mask" bindtap="onCloseModals">
     <view class="modal-sheet" catchtap="noop">
       <view class="modal-header">
@@ -345,9 +367,9 @@
       </view>
       <scroll-view class="modal-scroll" scroll-y="true">
         <view
-          wx:for="{{allSupplements}}"
+          wx:for="{{pickerSupplements}}"
           wx:key="id"
-          class="picker-item"
+          class="picker-item {{item.alreadyAdded ? 'picker-item-disabled' : ''}}"
           data-id="{{item.id}}"
           bindtap="onSelectPickerSupplement"
         >
@@ -356,7 +378,8 @@
             <text class="picker-name">{{item.name}}</text>
             <text class="muted-sm">{{item.category}} · {{item.unit_label}}</text>
           </view>
-          <text class="badge badge-orange">选用</text>
+          <text wx:if="{{item.alreadyAdded}}" class="badge badge-stone">已添加</text>
+          <text wx:else class="badge badge-orange">选用</text>
         </view>
       </scroll-view>
     </view>

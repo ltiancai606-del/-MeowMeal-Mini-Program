@@ -32,10 +32,10 @@ function mapUnitShort(unitBasis) {
 }
 
 function extractBrand(name) {
-  if (name.indexOf('NOW') === 0) return 'NOW Foods';
-  if (name.indexOf('Viva') === 0) return 'Viva Naturals';
-  if (name.indexOf('NaturesPlus') === 0) return 'NaturesPlus';
-  if (name.indexOf('Thompson') === 0) return 'Thompson';
+  if (name.indexOf('诺奥') !== -1 || name.indexOf('NOW') === 0) return '诺奥';
+  if (name.indexOf('维瓦') !== -1 || name.indexOf('Viva') === 0) return '维瓦';
+  if (name.indexOf('自然之加') !== -1 || name.indexOf('NaturesPlus') === 0) return '自然之加';
+  if (name.indexOf('汤普森') !== -1 || name.indexOf('Thompson') === 0) return '汤普森';
   if (name.indexOf('双鲸') !== -1) return '双鲸';
   return '通用';
 }
@@ -512,6 +512,10 @@ function calculateRecipeNutrition(ingredients, supplements, standard, lifeStage)
       highRiskUpper: Boolean(meta.highRiskUpper),
       decimals,
       totalAmount,
+      totalAmountText:
+        meta.key === 'ca_p_ratio'
+          ? ''
+          : `整份 ${totalAmount.toFixed(decimals)} ${meta.unit}`.trim(),
       per1000kcal: val,
       per1000kcalText: `${val.toFixed(decimals)} ${meta.unit}`.trim(),
       min: bounds.min,

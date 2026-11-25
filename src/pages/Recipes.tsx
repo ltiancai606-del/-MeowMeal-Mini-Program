@@ -965,23 +965,30 @@ function CreateOrEditRecipe() {
           ? computeRecommendedAmountForSupplement(supp, meatOnly, standard, lifeStage)
           : 0;
         setPreviewSupplements((prev) => {
+          const isDup = prev.some((s, idx) => idx !== replacingSupplementIdx && s.supplementId === newId);
+          if (isDup) return prev;
           const next = [...prev];
           next[replacingSupplementIdx] = {
             supplementId: newId,
-            amount: recomputed > 0 ? recomputed : next[replacingSupplementIdx].amount,
+            amount: recomputed,
           };
           return next;
         });
       }
     } else {
-      const added = selectedIds.map((sId) => {
-        const supp = getSupplementById(sId);
-        const recomputed = supp
-          ? computeRecommendedAmountForSupplement(supp, meatOnly, standard, lifeStage)
-          : 0;
-        return { supplementId: sId, amount: recomputed > 0 ? recomputed : '' };
+      setPreviewSupplements((prev) => {
+        const existingSet = new Set(prev.map((s) => s.supplementId));
+        const added = selectedIds
+          .filter((sId) => !existingSet.has(sId))
+          .map((sId) => {
+            const supp = getSupplementById(sId);
+            const recomputed = supp
+              ? computeRecommendedAmountForSupplement(supp, meatOnly, standard, lifeStage)
+              : 0;
+            return { supplementId: sId, amount: recomputed };
+          });
+        return [...prev, ...added];
       });
-      setPreviewSupplements((prev) => [...prev, ...added]);
     }
     setShowSupplementPicker(false);
   };
@@ -1279,7 +1286,9 @@ function CreateOrEditRecipe() {
 
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="text-sm font-bold text-stone-800">单日总喂量 (g/天)</label>
+                  <label className="text-sm font-bold text-stone-800">
+                    单日总喂量 ({selectedCats.length > 1 ? `${selectedCats.length}只猫合计 ` : ''}g/天)
+                  </label>
                   <span className="text-[#FF7B4A] font-bold">{dailyAmount}</span>
                 </div>
                 <input
@@ -1732,9 +1741,9 @@ function RecipeDetail() {
 
   const recipeCats = recipe ? MOCK_CATS.filter((c) => recipe.catIds.includes(c.id)) : [];
   const [activeStandard, setActiveStandard] = useState<StandardType>(recipe?.standard || 'NRC');
-  const [activeLifeStage, setActiveLifeStage] = useState<LifeStage>(
-    recipe?.lifeStage || inferLifeStageFromCats(recipeCats)
-  );
+  // 根据关联猫咪自动判断成猫/幼猫，不提供手动切换
+  const activeLifeStage: LifeStage =
+    recipeCats.length > 0 ? inferLifeStageFromCats(recipeCats) : recipe?.lifeStage || 'adult';
 
   const [isEditingRecipe, setIsEditingRecipe] = useState(false);
   const [editedIngredients, setEditedIngredients] = useState<{ meatId: string; weight: number | string }[]>([]);
@@ -1751,8 +1760,6 @@ function RecipeDetail() {
   useEffect(() => {
     if (recipe) {
       setActiveStandard(recipe.standard || 'NRC');
-      const cats = MOCK_CATS.filter((c) => recipe.catIds.includes(c.id));
-      setActiveLifeStage(recipe.lifeStage || inferLifeStageFromCats(cats));
     }
   }, [recipe?.id]);
 
@@ -1858,12 +1865,19 @@ function RecipeDetail() {
   const handleConfirmPicker = (selectedIds: string[]) => {
     if (replacingIndex !== null) {
       if (selectedIds.length > 0) {
-        const newArr = [...editedIngredients];
-        newArr[replacingIndex] = { ...newArr[replacingIndex], meatId: selectedIds[0] };
-        setEditedIngredients(newArr);
+        const targetId = selectedIds[0];
+        const isDup = editedIngredients.some((item, idx) => idx !== replacingIndex && item.meatId === targetId);
+        if (!isDup) {
+          const newArr = [...editedIngredients];
+          newArr[replacingIndex] = { ...newArr[replacingIndex], meatId: targetId };
+          setEditedIngredients(newArr);
+        }
       }
     } else {
-      const newIngredients = selectedIds.map((id) => ({ meatId: id, weight: '' }));
+      const existingSet = new Set(editedIngredients.map((i) => i.meatId));
+      const newIngredients = selectedIds
+        .filter((id) => !existingSet.has(id))
+        .map((id) => ({ meatId: id, weight: 0 }));
       setEditedIngredients([...editedIngredients, ...newIngredients]);
     }
     setShowIngredientPicker(false);
@@ -1906,39 +1920,34 @@ function RecipeDetail() {
     if (replacingSupplementIndex !== null) {
       if (selectedIds.length > 0) {
         const newId = selectedIds[0];
-        const supp = getSupplementById(newId);
-        const recomputed = supp
-          ? computeRecommendedAmountForSupplement(supp, meatOnly, activeStandard, activeLifeStage)
-          : 0;
-        const newArr = [...editedSupplements];
-        newArr[replacingSupplementIndex] = {
-          supplementId: newId,
-          amount: recomputed > 0 ? recomputed : newArr[replacingSupplementIndex].amount,
-        };
-        setEditedSupplements(newArr);
+        const isDup = editedSupplements.some((s, idx) => idx !== replacingSupplementIndex && s.supplementId === newId);
+        if (!isDup) {
+          const supp = getSupplementById(newId);
+          const recomputed = supp
+            ? computeRecommendedAmountForSupplement(supp, meatOnly, activeStandard, activeLifeStage)
+            : 0;
+          const newArr = [...editedSupplements];
+          newArr[replacingSupplementIndex] = {
+            supplementId: newId,
+            amount: recomputed,
+          };
+          setEditedSupplements(newArr);
+        }
       }
     } else {
-      const newSupplements = selectedIds.map((sId) => {
-        const supp = getSupplementById(sId);
-        const recomputed = supp
-          ? computeRecommendedAmountForSupplement(supp, meatOnly, activeStandard, activeLifeStage)
-          : 0;
-        return { supplementId: sId, amount: recomputed > 0 ? recomputed : '' };
-      });
+      const existingSet = new Set(editedSupplements.map((s) => s.supplementId));
+      const newSupplements = selectedIds
+        .filter((sId) => !existingSet.has(sId))
+        .map((sId) => {
+          const supp = getSupplementById(sId);
+          const recomputed = supp
+            ? computeRecommendedAmountForSupplement(supp, meatOnly, activeStandard, activeLifeStage)
+            : 0;
+          return { supplementId: sId, amount: recomputed };
+        });
       setEditedSupplements([...editedSupplements, ...newSupplements]);
     }
     setShowSupplementPicker(false);
-  };
-
-  const handleQuickBrandSwitch = (index: number, newSuppId: string) => {
-    const meatOnly = calculateRecipeNutrition(parsedIngredients, [], activeStandard, activeLifeStage);
-    const supp = getSupplementById(newSuppId);
-    const recomputed = supp
-      ? computeRecommendedAmountForSupplement(supp, meatOnly, activeStandard, activeLifeStage)
-      : 0;
-    const newArr = [...editedSupplements];
-    newArr[index] = { supplementId: newSuppId, amount: recomputed };
-    setEditedSupplements(newArr);
   };
 
   const handleAutoCalculateSupplements = () => {
@@ -1964,14 +1973,6 @@ function RecipeDetail() {
     }
   };
 
-  const handleSwitchLifeStage = (stage: LifeStage) => {
-    setActiveLifeStage(stage);
-    if (!isEditingRecipe) {
-      recipe.lifeStage = stage;
-      saveRecipes();
-    }
-  };
-
   const calc = calculateRecipeNutrition(parsedIngredients, parsedSupplements, activeStandard, activeLifeStage);
 
   const macroData = [
@@ -1987,7 +1988,20 @@ function RecipeDetail() {
       value,
     }));
 
-  const coreEvaluations = calc.evaluations.filter((ev) => ev.core);
+  const redEvaluations = calc.evaluations.filter((ev) => ev.status === 'red');
+  const yellowEvaluations = calc.evaluations.filter((ev) => ev.status === 'yellow');
+  const unqualifiedEvaluations = [...redEvaluations, ...yellowEvaluations];
+  const unqualifiedKeys = new Set(unqualifiedEvaluations.map((ev) => ev.key));
+  const displayEvaluations = [
+    ...unqualifiedEvaluations,
+    ...calc.evaluations.filter((ev) => ev.core && !unqualifiedKeys.has(ev.key)),
+  ];
+  const unqualifiedSummaryParts = [
+    redEvaluations.length > 0 ? `${redEvaluations.length} 项红灯` : '',
+    yellowEvaluations.length > 0 ? `${yellowEvaluations.length} 项黄灯` : '',
+  ].filter(Boolean);
+
+  // 全部 28 项按标准库原始顺序分组
   const groupedFullEvaluations = calc.evaluations.reduce((acc, ev) => {
     if (!acc[ev.group]) acc[ev.group] = [];
     acc[ev.group].push(ev);
@@ -2182,7 +2196,14 @@ function RecipeDetail() {
                             )}
                           </td>
                           <td className="py-2.5 text-stone-700 whitespace-nowrap pr-1">
-                            {ev.per1000kcal.toFixed(ev.decimals)} {ev.unit}
+                            <div className="font-medium">
+                              {ev.per1000kcal.toFixed(ev.decimals)} {ev.unit}
+                            </div>
+                            {ev.key !== 'ca_p_ratio' && (
+                              <div className="text-[10px] text-stone-400">
+                                整份 {ev.totalAmount.toFixed(ev.decimals)} {ev.unit}
+                              </div>
+                            )}
                           </td>
                           <td className="py-2.5 text-stone-500 text-[11px] pr-1">
                             {formatBoundsText(ev)}
@@ -2301,7 +2322,7 @@ function RecipeDetail() {
       {/* 营养达标情况 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-stone-100">
         <div className="flex justify-between items-center mb-3 gap-2">
-          <h3 className="font-semibold text-stone-800 text-sm">营养达标情况 (每 1,000 kcal ME)</h3>
+          <h3 className="font-semibold text-stone-800 text-sm">营养达标分析 (每 1,000 kcal ME)</h3>
           <button
             onClick={() => setShowFullNutritionModal(true)}
             className="text-[#FF7B4A] text-xs font-medium hover:text-orange-600 flex items-center gap-0.5 shrink-0"
@@ -2310,7 +2331,7 @@ function RecipeDetail() {
           </button>
         </div>
 
-        {/* 标准 & 生命阶段快速切换 */}
+        {/* 营养标准切换 + 自动判定生命阶段 */}
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex bg-stone-100 p-0.5 rounded-lg text-[11px]">
             {(['NRC', 'AAFCO'] as const).map((std) => (
@@ -2326,38 +2347,41 @@ function RecipeDetail() {
               </button>
             ))}
           </div>
-          <div className="flex bg-stone-100 p-0.5 rounded-lg text-[11px]">
-            {([
-              { id: 'adult', label: '成猫' },
-              { id: 'kitten', label: '幼猫' },
-            ] as const).map((stage) => (
-              <button
-                key={stage.id}
-                onClick={() => handleSwitchLifeStage(stage.id)}
-                className={cn(
-                  'px-2.5 py-1 rounded-md font-medium transition-colors',
-                  activeLifeStage === stage.id ? 'bg-white text-stone-800 shadow-xs' : 'text-stone-500'
-                )}
-              >
-                {stage.label}
-              </button>
-            ))}
-          </div>
+          <span className="text-[11px] font-medium text-stone-500 bg-stone-100 px-2.5 py-1 rounded-lg">
+            自动判定：{activeLifeStage === 'kitten' ? '幼猫生长期' : '成猫维持期'}
+          </span>
         </div>
+
+        {/* 不合格项总览提示 */}
+        {unqualifiedEvaluations.length > 0 ? (
+          <div className="mb-3 px-3 py-2 rounded-xl bg-red-50 border border-red-200/80 text-xs font-semibold text-red-600">
+            ⚠ 共 {unqualifiedEvaluations.length} 项未达标（{unqualifiedSummaryParts.join(' · ')}），已置顶展示
+          </div>
+        ) : (
+          <div className="mb-3 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200/80 text-xs font-semibold text-emerald-700">
+            ✓ 全部营养指标均已达标
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead className="text-[11px] text-stone-500 bg-stone-50">
               <tr>
                 <th className="px-2.5 py-2 rounded-l-lg font-medium">营养素</th>
-                <th className="px-2 py-2 font-medium">每1000kcal</th>
+                <th className="px-2 py-2 font-medium">每1000kcal / 整份</th>
                 <th className="px-2 py-2 font-medium">标准范围</th>
                 <th className="px-2 py-2 rounded-r-lg font-medium text-center">状态</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-50">
-              {coreEvaluations.map((ev) => (
-                <tr key={ev.key}>
+              {displayEvaluations.map((ev) => (
+                <tr
+                  key={ev.key}
+                  className={cn(
+                    ev.status === 'red' && 'bg-red-50/50',
+                    ev.status === 'yellow' && 'bg-amber-50/50'
+                  )}
+                >
                   <td className="px-2.5 py-2.5 text-stone-800 font-medium whitespace-nowrap">
                     {ev.label}
                     {ev.hasMissingSource && (
@@ -2367,7 +2391,15 @@ function RecipeDetail() {
                     )}
                   </td>
                   <td className="px-2 py-2.5 text-stone-700 whitespace-nowrap">
-                    {ev.per1000kcal.toFixed(ev.decimals)} {ev.unit}
+                    <div className="font-semibold">
+                      {ev.per1000kcal.toFixed(ev.decimals)} {ev.unit}
+                      {ev.key !== 'ca_p_ratio' && <span className="text-[10px] font-normal text-stone-400">/千卡</span>}
+                    </div>
+                    {ev.key !== 'ca_p_ratio' && (
+                      <div className="text-[10px] text-stone-400">
+                        整份 {ev.totalAmount.toFixed(ev.decimals)} {ev.unit}
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-2.5 text-stone-500 text-[11px]">
                     {formatBoundsText(ev)}
@@ -2382,7 +2414,7 @@ function RecipeDetail() {
 
           <div className="mt-3 space-y-1 text-[11px] text-stone-400">
             <p className="text-center">
-              * 统一按每 1,000 kcal 代谢能 (ME) 核算 · 熟自制推荐钙磷比 1.1–1.4（AAFCO 最低 1.0）
+              * 主数值为每 1,000 kcal 代谢能含量（与标准比对），小字为整份 {Math.round(calc.totalWeightG)}g 食谱总含量
             </p>
             {calc.hasMissingData && (
               <p className="text-center text-stone-400/90 flex items-center justify-center gap-1">
@@ -2399,6 +2431,9 @@ function RecipeDetail() {
         isOpen={showIngredientPicker}
         onClose={() => setShowIngredientPicker(false)}
         isReplacing={replacingIndex !== null}
+        existingMeatIds={editedIngredients
+          .filter((_, idx) => idx !== replacingIndex)
+          .map((i) => i.meatId)}
         initialSelectedIds={pickerInitialMeatIds}
         initialRoleFilter={pickerInitialRole}
         onConfirm={handleConfirmPicker}
@@ -2506,7 +2541,9 @@ function RecipeDetail() {
         isOpen={showSupplementPicker}
         onClose={() => setShowSupplementPicker(false)}
         isReplacing={replacingSupplementIndex !== null}
-        existingSupplementIds={editedSupplements.map((s) => s.supplementId)}
+        existingSupplementIds={editedSupplements
+          .filter((_, idx) => idx !== replacingSupplementIndex)
+          .map((s) => s.supplementId)}
         initialSelectedIds={pickerInitialSuppIds}
         onConfirm={handleConfirmSupplementPicker}
       />
@@ -2528,7 +2565,6 @@ function RecipeDetail() {
             {editedSupplements.map((item, idx) => {
               const supp = SUPPLEMENTS.find((s) => s.id === item.supplementId);
               if (!supp) return null;
-              const sameCategoryBrands = SUPPLEMENTS.filter((s) => s.type === supp.type);
 
               return (
                 <div key={idx} className="py-2 border-b border-stone-50 last:border-0 space-y-2">
@@ -2556,7 +2592,7 @@ function RecipeDetail() {
                       <button
                         onClick={() => openReplaceSupplementPicker(idx)}
                         className="p-1 text-blue-500 hover:bg-blue-50 rounded"
-                        title="切换品牌"
+                        title="更换补剂"
                       >
                         <RefreshCw className="w-4 h-4" />
                       </button>
@@ -2569,26 +2605,6 @@ function RecipeDetail() {
                       </button>
                     </div>
                   </div>
-                  {sameCategoryBrands.length > 1 && (
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] text-stone-400">品牌切换(自动重算):</span>
-                      {sameCategoryBrands.map((b) => (
-                        <button
-                          key={b.id}
-                          type="button"
-                          onClick={() => handleQuickBrandSwitch(idx, b.id)}
-                          className={cn(
-                            'text-[10px] px-2 py-0.5 rounded-full border transition-colors',
-                            b.id === supp.id
-                              ? 'bg-[#FF7B4A] text-white border-[#FF7B4A]'
-                              : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-orange-50'
-                          )}
-                        >
-                          {b.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}

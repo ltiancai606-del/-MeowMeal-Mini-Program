@@ -23,19 +23,27 @@
     "list": [
       {
         "pagePath": "pages/dashboard/index",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "images/tab/home.png",
+        "selectedIconPath": "images/tab/home-active.png"
       },
       {
         "pagePath": "pages/recipes/index",
-        "text": "食谱"
+        "text": "食谱",
+        "iconPath": "images/tab/recipes.png",
+        "selectedIconPath": "images/tab/recipes-active.png"
       },
       {
         "pagePath": "pages/inventory/index",
-        "text": "冰箱"
+        "text": "冰箱",
+        "iconPath": "images/tab/inventory.png",
+        "selectedIconPath": "images/tab/inventory-active.png"
       },
       {
         "pagePath": "pages/profile/index",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "images/tab/profile.png",
+        "selectedIconPath": "images/tab/profile-active.png"
       }
     ]
   },
