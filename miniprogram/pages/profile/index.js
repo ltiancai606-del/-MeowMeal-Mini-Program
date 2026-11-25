@@ -30,6 +30,12 @@ Page({
 
   onShow() {
     this.loadData();
+    try {
+      if (wx.getStorageSync('meow_open_add_cat') === '1') {
+        wx.removeStorageSync('meow_open_add_cat');
+        this.onOpenAddCat();
+      }
+    } catch (e) {}
   },
 
   initNavBarMetrics() {

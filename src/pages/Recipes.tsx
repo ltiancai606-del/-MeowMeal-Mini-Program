@@ -658,9 +658,19 @@ function SmartIngredientParseModal({ isOpen, onClose, onApply }: SmartIngredient
 }
 
 function RecipeList() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showNoCatModal, setShowNoCatModal] = useState(false);
   const [, setForceRender] = useState(0);
+
+  const handleOpenCreate = () => {
+    if (MOCK_CATS.length === 0) {
+      setShowNoCatModal(true);
+      return;
+    }
+    navigate('/recipes/create');
+  };
 
   const filteredRecipes = [...MOCK_RECIPES]
     .reverse()
@@ -697,13 +707,14 @@ function RecipeList() {
           <span className="text-stone-400">🍽️</span>
           食谱管理
         </h1>
-        <Link
-          to="/recipes/create"
+        <button
+          type="button"
+          onClick={handleOpenCreate}
           className="bg-[#FF7B4A] text-white px-4 py-2 rounded-full font-medium shadow-sm hover:bg-orange-600 flex items-center gap-1 text-sm"
         >
           <Plus className="w-4 h-4" />
           新建食谱
-        </Link>
+        </button>
       </header>
 
       <div className="relative mb-6">
@@ -873,6 +884,41 @@ function RecipeList() {
           })}
         </div>
       )}
+
+      {showNoCatModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-[2px] flex items-center justify-center p-5">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-xl border border-stone-100 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-orange-50 text-[#FF7B4A] flex items-center justify-center mx-auto text-2xl">
+              🐱
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-stone-800 mb-1.5">请先填写猫咪档案</h3>
+              <p className="text-xs text-stone-500 leading-relaxed">
+                没有猫咪档案无法创建食谱，请先添加至少一只猫咪档案以自动匹配成猫/幼猫营养标准与过敏忌口。
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowNoCatModal(false)}
+                className="flex-1 py-2.5 rounded-2xl bg-stone-100 text-stone-600 text-sm font-semibold hover:bg-stone-200 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNoCatModal(false);
+                  navigate('/profile/cats/new');
+                }}
+                className="flex-1 py-2.5 rounded-2xl bg-[#FF7B4A] text-white text-sm font-bold shadow-sm hover:bg-orange-600 transition-colors"
+              >
+                去添加猫咪
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -971,7 +1017,11 @@ function CreateOrEditRecipe() {
   const handleNextStep = () => {
     setError('');
     if (step === 1) {
-      if (MOCK_CATS.length > 0 && selectedCats.length === 0) {
+      if (MOCK_CATS.length === 0) {
+        setError('尚未填写猫咪档案，无法创建食谱，请先添加猫咪档案');
+        return;
+      }
+      if (selectedCats.length === 0) {
         setError('请至少选择一只猫咪');
         return;
       }
@@ -1140,6 +1190,10 @@ function CreateOrEditRecipe() {
   };
 
   const handleSave = () => {
+    if (MOCK_CATS.length === 0 || selectedCats.length === 0) {
+      setError('尚未填写猫咪档案，无法创建食谱，请先添加猫咪档案');
+      return;
+    }
     const totalDays = parseInt(days) || 7;
     const validIngredients = parsedPreviewIngredients.filter((i) => i.weight > 0);
     if (validIngredients.length === 0) {
@@ -1348,10 +1402,14 @@ function CreateOrEditRecipe() {
                 })}
               </div>
             ) : (
-              <div className="text-sm text-stone-500 bg-stone-50 p-4 rounded-2xl text-center">
-                暂无猫咪档案，
-                <Link to="/profile/cats/new" className="text-[#FF7B4A] font-medium underline">
-                  去添加
+              <div className="bg-orange-50/70 border border-dashed border-orange-200 p-4 rounded-2xl text-center space-y-2.5">
+                <p className="text-sm font-bold text-orange-700">⚠️ 尚未填写猫咪档案，无法创建食谱</p>
+                <p className="text-xs text-stone-500">请先添加至少一只猫咪档案，系统才能准确匹配营养标准与过敏原。</p>
+                <Link
+                  to="/profile/cats/new"
+                  className="inline-flex items-center gap-1 bg-[#FF7B4A] text-white px-4 py-2 rounded-full text-xs font-bold shadow-sm hover:bg-orange-600 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> 去添加猫咪档案
                 </Link>
               </div>
             )}
@@ -2245,7 +2303,15 @@ function CreateOrEditRecipe() {
             </button>
           )}
 
-          {step < 4 ? (
+          {step === 1 && MOCK_CATS.length === 0 ? (
+            <button
+              type="button"
+              onClick={() => navigate('/profile/cats/new')}
+              className="flex-1 bg-[#FF7B4A] text-white px-4 py-3 rounded-2xl font-bold shadow-md hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
+            >
+              请先添加猫咪档案 <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : step < 4 ? (
             <button
               onClick={handleNextStep}
               className="flex-1 bg-[#FF7B4A] text-white px-4 py-3 rounded-2xl font-bold shadow-md hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"

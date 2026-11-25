@@ -46,8 +46,10 @@
           <text wx:if="{{item.allergyText}}" class="allergy-tip">忌口: {{item.allergyText}}</text>
         </view>
       </view>
-      <view wx:else class="alert-info">
-        暂无猫咪档案，可直接按下方所选营养标准与生命阶段生成食谱，也可前往「我的」添加猫咪档案。
+      <view wx:else class="no-cat-block">
+        <text class="no-cat-title">⚠️ 尚未填写猫咪档案，无法创建食谱</text>
+        <text class="no-cat-desc">请先添加至少一只猫咪档案（体重、年龄、过敏原），系统才能准确匹配营养标准。</text>
+        <view class="btn-primary no-cat-btn" bindtap="onGoAddCat">+ 去添加猫咪档案</view>
       </view>
     </view>
 
@@ -519,7 +521,10 @@
   <!-- 底部固定操作栏（非 tabBar 页，底部安全区完整可见） -->
   <view class="bottom-bar">
     <view wx:if="{{step > 1}}" class="btn-secondary bottom-prev" bindtap="onPrevStep">上一步</view>
-    <view wx:if="{{step < 4}}" class="btn-primary bottom-next" bindtap="onNextStep">
+    <view wx:if="{{step === 1 && catOptions.length === 0}}" class="btn-primary bottom-next" bindtap="onGoAddCat">
+      请先添加猫咪档案
+    </view>
+    <view wx:elif="{{step < 4}}" class="btn-primary bottom-next" bindtap="onNextStep">
       {{step === 2 ? '生成并微调配方' : step === 3 ? '营养达标检查' : '下一步'}}
     </view>
     <view wx:else class="btn-primary bottom-next" bindtap="onSaveRecipe">保存食谱</view>

@@ -182,6 +182,40 @@ Page({
     });
   },
 
+  onShow() {
+    const cats = storage.getCats();
+    const validSelected = (this.data.selectedCatIds || []).filter((id) =>
+      cats.some((c) => c.id === id)
+    );
+    if (validSelected.length === 0 && cats.length > 0) {
+      const firstCat = cats[0];
+      const nextName = !this.data.isDirty ? `${firstCat.name}的专属熟自制餐` : this.data.name;
+      this.setData(
+        {
+          selectedCatIds: [firstCat.id],
+          name: nextName,
+        },
+        () => {
+          this.syncCatOptions();
+          this.updateTargetWeight();
+        }
+      );
+    } else if (validSelected.length !== (this.data.selectedCatIds || []).length) {
+      this.setData({ selectedCatIds: validSelected }, () => {
+        this.syncCatOptions();
+        this.updateTargetWeight();
+      });
+    } else {
+      this.syncCatOptions();
+    }
+  },
+
+  onGoAddCat() {
+    this.setUnsavedGuard(false);
+    try { wx.setStorageSync('meow_open_add_cat', '1'); } catch (e) {}
+    wx.switchTab({ url: '/pages/profile/index' });
+  },
+
   syncCatOptions() {
     const cats = storage.getCats();
     const selectedSet = this.data.selectedCatIds;
@@ -461,6 +495,26 @@ Page({
   onNextStep() {
     const { step, name, ingredients } = this.data;
     if (step === 1) {
+      const cats = storage.getCats();
+      if (!cats || cats.length === 0) {
+        wx.showModal({
+          title: '无法创建食谱',
+          content: '还没有填写猫咪档案，请先添加至少一只猫咪档案后再创建食谱。',
+          confirmText: '去添加猫咪',
+          cancelText: '取消',
+          confirmColor: '#FF7B4A',
+          success: (res) => {
+            if (res.confirm) {
+              this.onGoAddCat();
+            }
+          },
+        });
+        return;
+      }
+      if (!this.data.selectedCatIds || this.data.selectedCatIds.length === 0) {
+        wx.showToast({ title: '请至少选择一只猫咪', icon: 'none' });
+        return;
+      }
       if (!name.trim()) {
         wx.showToast({ title: '请输入食谱名称', icon: 'none' });
         return;
@@ -848,6 +902,11 @@ Page({
   },
 
   onSaveRecipe() {
+    const cats = storage.getCats();
+    if (!cats || cats.length === 0 || !this.data.selectedCatIds || this.data.selectedCatIds.length === 0) {
+      wx.showToast({ title: '请先填写并选择猫咪档案', icon: 'none' });
+      return;
+    }
     const cleanIngs = this.data.ingredients.filter((i) => Number(i.weight) > 0);
     if (cleanIngs.length === 0) {
       wx.showToast({ title: '请至少保留一项重量大于 0g 的食材', icon: 'none' });

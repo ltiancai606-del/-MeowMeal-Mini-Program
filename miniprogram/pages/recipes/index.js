@@ -81,6 +81,23 @@ Page({
   },
 
   goCreate() {
+    const cats = storage.getCats();
+    if (!cats || cats.length === 0) {
+      wx.showModal({
+        title: '请先填写猫咪档案',
+        content: '没有猫咪档案无法创建食谱，请先添加至少一只猫咪档案以匹配营养标准与过敏忌口。',
+        confirmText: '去添加猫咪',
+        cancelText: '取消',
+        confirmColor: '#FF7B4A',
+        success: (res) => {
+          if (res.confirm) {
+            try { wx.setStorageSync('meow_open_add_cat', '1'); } catch (e) {}
+            wx.switchTab({ url: '/pages/profile/index' });
+          }
+        },
+      });
+      return;
+    }
     wx.navigateTo({ url: '/pages/recipe-create/index' });
   },
 
