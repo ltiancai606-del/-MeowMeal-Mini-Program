@@ -892,9 +892,9 @@ function RecipeList() {
               🐱
             </div>
             <div>
-              <h3 className="text-base font-bold text-stone-800 mb-1.5">请先填写猫咪档案</h3>
+              <h3 className="text-base font-bold text-stone-800 mb-1.5">请先建立猫咪档案</h3>
               <p className="text-xs text-stone-500 leading-relaxed">
-                没有猫咪档案无法创建食谱，请先添加至少一只猫咪档案以自动匹配成猫/幼猫营养标准与过敏忌口。
+                还没有猫咪档案，请先建立猫咪档案后再创建食谱。
               </p>
             </div>
             <div className="flex gap-2.5 pt-1">
@@ -913,7 +913,7 @@ function RecipeList() {
                 }}
                 className="flex-1 py-2.5 rounded-2xl bg-[#FF7B4A] text-white text-sm font-bold shadow-sm hover:bg-orange-600 transition-colors"
               >
-                去添加猫咪
+                去新建
               </button>
             </div>
           </div>

@@ -97,9 +97,9 @@ Page({
     const cats = storage.getCats();
     if (!cats || cats.length === 0) {
       wx.showModal({
-        title: '请先填写猫咪档案',
-        content: '没有猫咪档案无法创建食谱，请先添加至少一只猫咪档案以匹配营养标准与过敏忌口。',
-        confirmText: '去添加猫咪',
+        title: '请先建立猫咪档案',
+        content: '还没有猫咪档案，请先建立猫咪档案后再创建食谱。',
+        confirmText: '去新建',
         cancelText: '取消',
         confirmColor: '#FF7B4A',
         success: (res) => {
