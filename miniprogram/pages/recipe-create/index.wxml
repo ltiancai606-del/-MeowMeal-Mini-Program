@@ -14,14 +14,14 @@
       <input
         class="form-input"
         value="{{name}}"
-        placeholder="例如：汤圆的冬季鸡猪均衡餐"
+        placeholder="例如：日常鸡猪均衡营养餐"
         bindinput="onNameInput"
       />
     </view>
 
     <view class="card">
       <view class="section-title mb-20">2. 选择适用猫咪（自动规避过敏原）</view>
-      <view class="cat-select-grid">
+      <view wx:if="{{catOptions.length > 0}}" class="cat-select-grid">
         <view
           wx:for="{{catOptions}}"
           wx:key="id"
@@ -33,6 +33,9 @@
           <text class="muted-sm">{{item.weight}}kg · {{item.age}}岁</text>
           <text wx:if="{{item.allergyText}}" class="allergy-tip">忌口: {{item.allergyText}}</text>
         </view>
+      </view>
+      <view wx:else class="alert-info">
+        暂无猫咪档案，可直接按下方所选营养标准与生命阶段生成食谱，也可前往「我的」添加猫咪档案。
       </view>
     </view>
 

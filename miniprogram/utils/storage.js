@@ -1,80 +1,48 @@
-const engine = require('./nutritionEngine');
-
 const KEYS = {
-  USER: 'meowmeal_wx_user',
-  CATS: 'meowmeal_wx_cats',
-  INVENTORY: 'meowmeal_wx_inventory',
-  RECIPES: 'meowmeal_wx_recipes',
+  USER: 'meowmeal_prod_user',
+  CATS: 'meowmeal_prod_cats',
+  INVENTORY: 'meowmeal_prod_inventory',
+  RECIPES: 'meowmeal_prod_recipes',
 };
 
-const DEFAULT_USER = {
-  nickname: '铲屎官小王',
-  daysUsed: 48,
-};
-
-const DEFAULT_CATS = [
-  {
-    id: 'c1',
-    name: '汤圆',
-    age: 2,
-    weight: 4.5,
-    gender: 'male',
-    neutered: true,
-    allergies: ['牛肉'],
-    dietNeeds: ['化毛', '美毛'],
-  },
-  {
-    id: 'c2',
-    name: '布丁',
-    age: 1.5,
-    weight: 3.8,
-    gender: 'female',
-    neutered: true,
-    allergies: [],
-    dietNeeds: ['护肾', '减脂'],
-  },
+const LEGACY_DEMO_KEYS = [
+  'meowmeal_wx_user',
+  'meowmeal_wx_cats',
+  'meowmeal_wx_inventory',
+  'meowmeal_wx_recipes',
 ];
 
-const DEFAULT_INVENTORY = [
-  { id: 'inv1', meatId: 'ing_086', weight: 1000, price: 28, productionDate: '2026-11-20', expiryDate: '2027-01-15' },
-  { id: 'inv2', meatId: 'ing_001', weight: 500, price: 24, productionDate: '2026-11-20', expiryDate: '2026-12-05' },
-  { id: 'inv3', meatId: 'ing_089', weight: 300, price: 15, productionDate: '2026-11-20', expiryDate: '2026-12-01' },
-  { id: 'inv4', meatId: 'ing_126', weight: 250, price: 38, productionDate: '2026-11-20', expiryDate: '2026-12-03' },
-];
+function getTodayStr() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
-const DEFAULT_RECIPE_INGREDIENTS = [
-  { meatId: 'ing_086', weight: 350 },
-  { meatId: 'ing_001', weight: 250 },
-  { meatId: 'ing_089', weight: 150 },
-  { meatId: 'ing_126', weight: 100 },
-  { meatId: 'ing_131', weight: 50 },
-  { meatId: 'ing_090', weight: 50 },
-  { meatId: 'ing_006', weight: 50 },
-];
+function computeDaysUsed(firstUseDate) {
+  if (!firstUseDate) return 1;
+  const start = new Date(String(firstUseDate).replace(/-/g, '/'));
+  if (isNaN(start.getTime())) return 1;
+  const now = new Date();
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.max(1, Math.floor((today - startDay) / (24 * 60 * 60 * 1000)) + 1);
+}
 
-const DEFAULT_RECIPES = [
-  {
-    id: 'r1',
-    name: '汤圆的日常鸡猪均衡餐',
-    catIds: ['c1'],
-    standard: 'NRC',
-    lifeStage: 'adult',
-    days: 7,
-    mode: 'by_need',
-    ingredients: DEFAULT_RECIPE_INGREDIENTS,
-    supplements: engine.recommendSupplements(DEFAULT_RECIPE_INGREDIENTS, 'NRC', 'adult'),
-    createdAt: '2026-11-20',
-    isActive: true,
-    executedDays: 2,
-    startDate: '2026-11-20 08:00',
-  },
-];
+function createDefaultUser() {
+  return {
+    nickname: '铲屎官',
+    firstUseDate: getTodayStr(),
+    daysUsed: 1,
+  };
+}
 
 function safeGet(key, fallback) {
   try {
     if (typeof wx !== 'undefined' && wx.getStorageSync) {
       const val = wx.getStorageSync(key);
-      if (val && (Array.isArray(val) ? val.length >= 0 : true)) {
+      if (val !== '' && val !== null && val !== undefined) {
         return val;
       }
     }
@@ -96,38 +64,66 @@ function safeSet(key, value) {
 
 function ensureInitialized() {
   if (typeof wx === 'undefined' || !wx.getStorageSync) return;
-  if (!wx.getStorageSync(KEYS.USER)) safeSet(KEYS.USER, DEFAULT_USER);
-  if (!wx.getStorageSync(KEYS.CATS)) safeSet(KEYS.CATS, DEFAULT_CATS);
-  if (!wx.getStorageSync(KEYS.INVENTORY)) safeSet(KEYS.INVENTORY, DEFAULT_INVENTORY);
-  if (!wx.getStorageSync(KEYS.RECIPES)) safeSet(KEYS.RECIPES, DEFAULT_RECIPES);
+  // 清理旧版演示初始化缓存，确保上线为纯净空状态
+  LEGACY_DEMO_KEYS.forEach((legacyKey) => {
+    try {
+      if (wx.removeStorageSync) wx.removeStorageSync(legacyKey);
+    } catch (e) {
+      // ignore
+    }
+  });
+
+  if (!wx.getStorageSync(KEYS.USER)) safeSet(KEYS.USER, createDefaultUser());
+  if (wx.getStorageSync(KEYS.CATS) === '') safeSet(KEYS.CATS, []);
+  if (wx.getStorageSync(KEYS.INVENTORY) === '') safeSet(KEYS.INVENTORY, []);
+  if (wx.getStorageSync(KEYS.RECIPES) === '') safeSet(KEYS.RECIPES, []);
 }
 
 function getUser() {
-  return safeGet(KEYS.USER, DEFAULT_USER);
+  const user = safeGet(KEYS.USER, createDefaultUser());
+  const firstUseDate = user.firstUseDate || getTodayStr();
+  return Object.assign({}, user, {
+    nickname: user.nickname || '铲屎官',
+    firstUseDate,
+    daysUsed: computeDaysUsed(firstUseDate),
+  });
 }
+
 function saveUser(user) {
-  safeSet(KEYS.USER, user);
+  const current = getUser();
+  safeSet(
+    KEYS.USER,
+    Object.assign({}, current, user, {
+      firstUseDate: (user && user.firstUseDate) || current.firstUseDate || getTodayStr(),
+    })
+  );
 }
 
 function getCats() {
-  return safeGet(KEYS.CATS, DEFAULT_CATS);
+  const list = safeGet(KEYS.CATS, []);
+  return Array.isArray(list) ? list : [];
 }
+
 function saveCats(cats) {
-  safeSet(KEYS.CATS, cats);
+  safeSet(KEYS.CATS, Array.isArray(cats) ? cats : []);
 }
 
 function getInventory() {
-  return safeGet(KEYS.INVENTORY, DEFAULT_INVENTORY);
+  const list = safeGet(KEYS.INVENTORY, []);
+  return Array.isArray(list) ? list : [];
 }
+
 function saveInventory(items) {
-  safeSet(KEYS.INVENTORY, items);
+  safeSet(KEYS.INVENTORY, Array.isArray(items) ? items : []);
 }
 
 function getRecipes() {
-  return safeGet(KEYS.RECIPES, DEFAULT_RECIPES);
+  const list = safeGet(KEYS.RECIPES, []);
+  return Array.isArray(list) ? list : [];
 }
+
 function saveRecipes(recipes) {
-  safeSet(KEYS.RECIPES, recipes);
+  safeSet(KEYS.RECIPES, Array.isArray(recipes) ? recipes : []);
 }
 
 function getRecipeById(id) {

@@ -12,24 +12,24 @@ view, text, scroll-view, input, textarea, button {
 
 .page-wrap {
   min-height: 100vh;
-  padding: 28rpx 32rpx 160rpx;
+  padding: 20rpx 28rpx 28rpx;
   background-color: #F9F7F4;
 }
 
 .card {
   background-color: #FFFFFF;
-  border-radius: 36rpx;
-  padding: 32rpx;
-  margin-bottom: 24rpx;
-  box-shadow: 0 4rpx 20rpx rgba(28, 25, 23, 0.04);
+  border-radius: 30rpx;
+  padding: 24rpx 26rpx;
+  margin-bottom: 18rpx;
+  box-shadow: 0 4rpx 16rpx rgba(28, 25, 23, 0.04);
   border: 1rpx solid #F5F5F4;
 }
 
 .card-warm {
   background-color: #FFFAF5;
-  border-radius: 36rpx;
-  padding: 32rpx;
-  margin-bottom: 24rpx;
+  border-radius: 30rpx;
+  padding: 24rpx 26rpx;
+  margin-bottom: 18rpx;
   border: 1rpx solid #FFEDD5;
 }
 
@@ -37,7 +37,7 @@ view, text, scroll-view, input, textarea, button {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24rpx;
+  margin-bottom: 16rpx;
 }
 
 .section-title {

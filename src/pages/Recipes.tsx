@@ -838,15 +838,15 @@ function CreateOrEditRecipe() {
   const handleNextStep = () => {
     setError('');
     if (step === 1) {
-      if (selectedCats.length === 0) {
+      if (MOCK_CATS.length > 0 && selectedCats.length === 0) {
         setError('请至少选择一只猫咪');
         return;
       }
       setStep(2);
     } else if (step === 2) {
       if (!name.trim()) {
-        const catNames = selectedCats.map((cId) => MOCK_CATS.find((c) => c.id === cId)?.name).join('');
-        setName(`${catNames}的${standard}营养餐`);
+        const catNames = selectedCats.map((cId) => MOCK_CATS.find((c) => c.id === cId)?.name).filter(Boolean).join('');
+        setName(catNames ? `${catNames}的${standard}营养餐` : `我的${standard}营养餐`);
       }
 
       const totalDays = parseInt(days) || 7;
@@ -1085,7 +1085,7 @@ function CreateOrEditRecipe() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例如: 汤圆日常均衡营养餐"
+              placeholder="例如: 日常鸡猪均衡营养餐"
               className="w-full px-4 py-3 bg-stone-50 border border-stone-100 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#FF7B4A]/20 text-sm font-medium"
             />
             <p className="text-[10px] text-stone-400 mt-2 ml-1">不填将自动生成名称</p>

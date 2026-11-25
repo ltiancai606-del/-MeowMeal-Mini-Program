@@ -1,118 +1,164 @@
-<view class="page-wrap">
-  <!-- 顶部橙色个人头部卡片 -->
-  <view class="profile-hero">
-    <view class="hero-top">
-      <view class="avatar-box">🐾</view>
-      <view class="hero-info">
-        <text class="hero-name">{{user.nickname}}</text>
-        <text class="hero-sub">已使用喵膳 {{user.daysUsed}} 天 · 科学熟自制</text>
-      </view>
-    </view>
-    <view class="hero-stats">
-      <view class="hero-stat-item">
-        <text class="hero-stat-num">{{cats.length}}</text>
-        <text class="hero-stat-label">猫咪档案</text>
-      </view>
-      <view class="hero-stat-divider"></view>
-      <view class="hero-stat-item">
-        <text class="hero-stat-num">{{recipeCount}}</text>
-        <text class="hero-stat-label">专属食谱</text>
-      </view>
-      <view class="hero-stat-divider"></view>
-      <view class="hero-stat-item">
-        <text class="hero-stat-num">{{inventoryCount}}</text>
-        <text class="hero-stat-label">冰箱食材</text>
-      </view>
-    </view>
-  </view>
-
-  <!-- 猫咪档案区 -->
-  <view class="card">
-    <view class="section-header">
-      <text class="section-title">🐱 我的猫咪</text>
-      <text class="link-orange" bindtap="onOpenAddCat">+ 添加猫咪</text>
-    </view>
-
-    <scroll-view wx:if="{{cats.length > 0}}" class="cat-tabs" scroll-x="true" enable-flex="true">
-      <view class="cat-tabs-row">
-        <view
-          wx:for="{{cats}}"
-          wx:key="id"
-          class="cat-tab {{selectedCatId === item.id ? 'cat-tab-active' : ''}}"
-          data-id="{{item.id}}"
-          bindtap="onSelectCat"
-        >
-          <text>{{item.gender === 'male' ? '♂' : '♀'}} {{item.name}}</text>
-        </view>
-      </view>
-    </scroll-view>
-
-    <view wx:if="{{activeCat}}" class="cat-detail-box">
-      <view class="cat-detail-top">
-        <view class="cat-avatar-lg">🐱</view>
-        <view class="cat-detail-main">
-          <view class="cat-name-row">
-            <text class="cat-detail-name">{{activeCat.name}}</text>
-            <text class="badge badge-orange">{{activeCat.lifeStageLabel}}</text>
-            <text class="badge badge-stone">{{activeCat.neutered ? '已绝育' : '未绝育'}}</text>
+<view class="profile-page">
+  <!-- 橙色个人头部 -->
+  <view class="orange-header">
+    <view class="user-row">
+      <view class="user-left">
+        <view class="user-avatar">😊</view>
+        <view class="user-info">
+          <view class="user-name-line">
+            <text class="user-name">{{user.nickname}}</text>
+            <text class="user-badge">⭐ 科学喂养达人</text>
           </view>
-          <text class="muted">{{activeCat.age}} 岁 · {{activeCat.weight}} kg · 预估日需 {{activeCat.dailyMeatG}}g 熟自制</text>
+          <text class="user-sub">已养 {{cats.length}} 只猫 · 使用喵膳 {{user.daysUsed}} 天</text>
         </view>
-        <view class="edit-pill" bindtap="onOpenEditCat">编辑</view>
+      </view>
+      <view class="header-edit-btn" bindtap="onOpenEditUser">✏️</view>
+    </view>
+  </view>
+
+  <!-- 主体自适应填满一屏 -->
+  <view class="profile-body">
+    <!-- 猫咪档案卡片 -->
+    <view class="p-card cat-section">
+      <view class="p-section-header">
+        <text class="p-section-title">🐾 猫咪档案</text>
+        <text class="link-add" bindtap="onOpenAddCat">+ 添加猫咪</text>
       </view>
 
-      <view class="cat-tags-row">
-        <text class="tag-title">过敏忌口：</text>
-        <block wx:if="{{activeCat.allergies.length > 0}}">
-          <text wx:for="{{activeCat.allergies}}" wx:key="*this" class="badge badge-red">{{item}}</text>
-        </block>
-        <text wx:else class="muted-sm">无已知过敏原</text>
+      <block wx:if="{{cats.length > 0}}">
+        <scroll-view class="cat-tabs" scroll-x="true" enable-flex="true">
+          <view class="cat-tabs-row">
+            <view
+              wx:for="{{cats}}"
+              wx:key="id"
+              class="cat-tab {{selectedCatId === item.id ? 'cat-tab-active' : ''}}"
+              data-id="{{item.id}}"
+              bindtap="onSelectCat"
+            >
+              <text>🐱 {{item.name}}</text>
+            </view>
+            <view class="cat-tab-add" bindtap="onOpenAddCat">+</view>
+          </view>
+        </scroll-view>
+
+        <view wx:if="{{activeCat}}" class="cat-detail-box">
+          <view class="cat-detail-top">
+            <view class="cat-top-left">
+              <view class="cat-avatar-lg">🐱</view>
+              <view class="cat-detail-main">
+                <view class="cat-name-line">
+                  <text class="cat-detail-name">{{activeCat.name}}</text>
+                  <text class="cat-status {{activeCat.neutered ? 'status-green' : 'status-stone'}}">{{activeCat.neutered ? '已绝育' : '未绝育'}}</text>
+                </view>
+                <text class="cat-detail-meta">{{activeCat.gender === 'male' ? '公猫' : '母猫'}} · {{activeCat.age}}岁 · <text class="cat-weight-val">{{activeCat.weight}}kg</text></text>
+              </view>
+            </view>
+
+            <view class="cat-inline-actions">
+              <view class="cat-edit-mini" bindtap="onOpenEditCat">编辑</view>
+              <view class="cat-del-mini" bindtap="onDeleteActiveCat">删除</view>
+            </view>
+          </view>
+
+          <!-- 过敏忌口 & 健康需求 左右双列 -->
+          <view class="cat-traits-grid">
+            <view class="trait-col">
+              <text class="info-title">⚠️ 过敏忌口</text>
+              <view wx:if="{{activeCat.allergies.length > 0}}" class="pill-wrap">
+                <text wx:for="{{activeCat.allergies}}" wx:key="*this" class="trait-pill pill-red">{{item}}</text>
+              </view>
+              <text wx:else class="trait-empty">无已知过敏原</text>
+            </view>
+
+            <view class="trait-col">
+              <text class="info-title">💊 健康需求</text>
+              <view wx:if="{{activeCat.dietNeeds.length > 0}}" class="pill-wrap">
+                <text wx:for="{{activeCat.dietNeeds}}" wx:key="*this" class="trait-pill pill-blue">{{item}}</text>
+              </view>
+              <text wx:else class="trait-empty">常规均衡养护</text>
+            </view>
+          </view>
+        </view>
+      </block>
+
+      <view wx:else class="empty-cat-box">
+        <text class="trait-empty">还没有添加猫咪档案</text>
+        <view class="btn-primary empty-cat-btn" bindtap="onOpenAddCat">+ 添加第一只猫咪</view>
+      </view>
+    </view>
+
+    <!-- 使用统计 -->
+    <view class="p-card stats-section">
+      <view class="p-section-header">
+        <text class="p-section-title">📊 使用统计</text>
+        <text class="muted-label">实时同步</text>
+      </view>
+      <view class="stats-grid">
+        <view class="stat-box stat-orange">
+          <view class="stat-val-row">
+            <text class="stat-num text-orange">{{recipeCount}}</text>
+            <text class="stat-unit text-orange-light">份</text>
+          </view>
+          <text class="stat-lbl">专属食谱</text>
+        </view>
+        <view class="stat-box stat-blue">
+          <view class="stat-val-row">
+            <text class="stat-num text-blue">{{totalMadeKg}}</text>
+            <text class="stat-unit text-blue-light">kg</text>
+          </view>
+          <text class="stat-lbl">累计制作</text>
+        </view>
+        <view class="stat-box stat-purple">
+          <view class="stat-val-row">
+            <text class="stat-unit text-purple-light">¥</text>
+            <text class="stat-num text-purple">{{totalSpent}}</text>
+          </view>
+          <text class="stat-lbl">库存投入</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 左右双列营养库 + 标准对齐条 -->
+    <view class="bottom-group">
+      <view class="lib-grid">
+        <view class="lib-item" bindtap="onGoIngredients">
+          <view class="menu-icon bg-orange-soft">🥩</view>
+          <view class="menu-texts">
+            <text class="menu-title">食材营养库</text>
+            <text class="menu-sub">176 项分级数据</text>
+          </view>
+        </view>
+        <view class="lib-item" bindtap="onGoSupplements">
+          <view class="menu-icon bg-warm-soft">💊</view>
+          <view class="menu-texts">
+            <text class="menu-title">营养剂库</text>
+            <text class="menu-sub">10 款标准补剂</text>
+          </view>
+        </view>
       </view>
 
-      <view class="cat-tags-row">
-        <text class="tag-title">饮食偏好：</text>
-        <block wx:if="{{activeCat.dietNeeds.length > 0}}">
-          <text wx:for="{{activeCat.dietNeeds}}" wx:key="*this" class="badge badge-blue">{{item}}</text>
-        </block>
-        <text wx:else class="muted-sm">常规均衡养护</text>
+      <view class="std-strip">
+        <view class="std-left">
+          <text class="std-icon">⚖️</text>
+          <text class="std-text">内置 NRC 2006 + AAFCO 2016/2026 标准</text>
+        </view>
+        <text class="std-badge">已对齐</text>
       </view>
     </view>
   </view>
 
-  <!-- 数据库与标准说明 -->
-  <view class="card">
-    <view class="section-header">
-      <text class="section-title">📚 专业工具与标准</text>
-    </view>
-    <view class="menu-item" bindtap="onGoIngredients">
-      <view class="menu-left">
-        <text class="menu-icon">🥩</text>
-        <view>
-          <text class="menu-title">食材营养库</text>
-          <text class="menu-sub">176 项生鲜肉类/海鲜/油脂 · 置信度分级</text>
-        </view>
+  <!-- 编辑昵称弹窗 -->
+  <view wx:if="{{showUserModal}}" class="modal-mask" bindtap="onCloseUserModal">
+    <view class="modal-sheet" catchtap="noop">
+      <view class="modal-header">
+        <text class="modal-title">修改昵称</text>
+        <view class="modal-close" bindtap="onCloseUserModal">✕</view>
       </view>
-      <text class="menu-arrow">›</text>
-    </view>
-    <view class="menu-item" bindtap="onGoSupplements">
-      <view class="menu-left">
-        <text class="menu-icon">💊</text>
-        <view>
-          <text class="menu-title">营养剂库</text>
-          <text class="menu-sub">10 款常见补剂 · 钙粉/鱼油/碘/维B/维E/牛磺酸</text>
-        </view>
+      <view class="form-item">
+        <text class="form-label">铲屎官昵称</text>
+        <input class="form-input" value="{{formNickname}}" placeholder="请输入昵称" bindinput="onNicknameInput" />
       </view>
-      <text class="menu-arrow">›</text>
-    </view>
-    <view class="menu-item no-border">
-      <view class="menu-left">
-        <text class="menu-icon">⚖️</text>
-        <view>
-          <text class="menu-title">内置营养标准</text>
-          <text class="menu-sub">NRC 2006 (RA / SUL) + AAFCO 2016/2026 (Min / Max)</text>
-        </view>
-      </view>
-      <text class="badge badge-green">已对齐</text>
+      <view class="btn-primary" bindtap="onSaveUser">保存昵称</view>
     </view>
   </view>
 
@@ -127,7 +173,7 @@
       <scroll-view class="modal-scroll" scroll-y="true">
         <view class="form-item">
           <text class="form-label">猫咪昵称</text>
-          <input class="form-input" value="{{formName}}" placeholder="例如：汤圆" bindinput="onNameInput" />
+          <input class="form-input" value="{{formName}}" placeholder="请输入猫咪昵称" bindinput="onNameInput" />
         </view>
 
         <view class="form-grid">
@@ -169,7 +215,7 @@
         </view>
 
         <view class="modal-actions">
-          <view wx:if="{{editingCatId && cats.length > 1}}" class="btn-danger action-del" bindtap="onDeleteCat">删除</view>
+          <view wx:if="{{editingCatId}}" class="btn-danger action-del" bindtap="onDeleteCat">删除</view>
           <view class="btn-primary action-save" bindtap="onSaveCat">保存档案</view>
         </view>
       </scroll-view>

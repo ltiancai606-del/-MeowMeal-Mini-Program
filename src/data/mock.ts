@@ -7,7 +7,6 @@ import {
   StandardType,
   migrateLegacyMeatId,
   migrateLegacySupplementId,
-  recommendSupplements,
 } from '../lib/nutritionEngine';
 
 export type MeatNutrient = IngredientRecord;
@@ -53,53 +52,119 @@ export interface Recipe {
   endDate?: string;
 }
 
-export const MOCK_USER = {
-  nickname: '铲屎官小王',
-  avatarUrl: '',
+export interface UserProfile {
+  nickname: string;
+  avatarUrl: string;
+  firstUseDate: string;
+}
+
+const STORAGE_KEYS = {
+  USER: 'meowmeal_prod_user',
+  CATS: 'meowmeal_prod_cats',
+  INVENTORY: 'meowmeal_prod_inventory',
+  RECIPES: 'meowmeal_prod_recipes',
 };
 
-export const MOCK_CATS: CatProfile[] = [
-  {
-    id: 'c1',
-    name: '汤圆',
-    age: 2,
-    weight: 4.5,
-    gender: 'male',
-    neutered: true,
-    allergies: ['牛肉'],
-    dietNeeds: ['化毛', '美毛'],
+const LEGACY_KEYS = ['meowmeal_cats', 'meowmeal_inventory', 'meowmeal_recipes'];
+
+function cleanupLegacyDemoStorage() {
+  try {
+    LEGACY_KEYS.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // ignore
+  }
+}
+
+cleanupLegacyDemoStorage();
+
+function getTodayStr(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function getDaysUsed(firstUseDate?: string): number {
+  if (!firstUseDate) return 1;
+  const start = new Date(firstUseDate.replace(/-/g, '/'));
+  if (isNaN(start.getTime())) return 1;
+  const now = new Date();
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.max(1, Math.floor((today - startDay) / (24 * 60 * 60 * 1000)) + 1);
+}
+
+const loadUser = (): UserProfile => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.USER);
+    if (saved) {
+      const parsed = JSON.parse(saved) as Partial<UserProfile>;
+      return {
+        nickname: parsed.nickname || '铲屎官',
+        avatarUrl: parsed.avatarUrl || '',
+        firstUseDate: parsed.firstUseDate || getTodayStr(),
+      };
+    }
+  } catch (e) {
+    console.error('Failed to load user', e);
+  }
+  const fresh: UserProfile = {
+    nickname: '铲屎官',
     avatarUrl: '',
-  },
-  {
-    id: 'c2',
-    name: '布丁',
-    age: 1.5,
-    weight: 3.8,
-    gender: 'female',
-    neutered: true,
-    allergies: [],
-    dietNeeds: ['护肾', '减脂'],
-    avatarUrl: '',
-  },
-];
+    firstUseDate: getTodayStr(),
+  };
+  try {
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(fresh));
+  } catch {
+    // ignore
+  }
+  return fresh;
+};
+
+export const MOCK_USER: UserProfile = loadUser();
+
+export const saveUser = () => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(MOCK_USER));
+  } catch (e) {
+    console.error('Failed to save user', e);
+  }
+};
+
+const loadCats = (): CatProfile[] => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.CATS);
+    if (saved) {
+      const parsed = JSON.parse(saved) as CatProfile[];
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to load cats', e);
+  }
+  return [];
+};
+
+export const MOCK_CATS: CatProfile[] = loadCats();
+
+export const saveCats = () => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CATS, JSON.stringify(MOCK_CATS));
+  } catch (e) {
+    console.error('Failed to save cats', e);
+  }
+};
 
 // 唯一数据源：直接来自 ingredients.json (176项) 与 supplements.json (10款)
 export const MEAT_DATABASE: MeatNutrient[] = INGREDIENTS_DB;
 export const SUPPLEMENTS: Supplement[] = SUPPLEMENTS_DB;
 
-const defaultInventory: InventoryItem[] = [
-  { id: 'inv1', meatId: 'ing_086', weight: 1000, price: 28, productionDate: '2026-11-20', expiryDate: '2027-01-15', addedDate: '2026-11-20', status: 'normal' }, // 鸡胸肉
-  { id: 'inv2', meatId: 'ing_001', weight: 500, price: 24, productionDate: '2026-11-20', expiryDate: '2026-12-05', addedDate: '2026-11-20', status: 'expiring' },  // 猪里脊
-  { id: 'inv3', meatId: 'ing_089', weight: 300, price: 15, productionDate: '2026-11-20', expiryDate: '2026-12-01', addedDate: '2026-11-20', status: 'expiring' },  // 鸡心
-  { id: 'inv4', meatId: 'ing_126', weight: 250, price: 38, productionDate: '2026-11-20', expiryDate: '2026-12-03', addedDate: '2026-11-20', status: 'expiring' },  // 三文鱼
-];
-
 const loadInventory = (): InventoryItem[] => {
   try {
-    const saved = localStorage.getItem('meowmeal_inventory');
+    const saved = localStorage.getItem(STORAGE_KEYS.INVENTORY);
     if (saved) {
       const parsed = JSON.parse(saved) as InventoryItem[];
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed.map((item) => ({
           ...item,
           meatId: migrateLegacyMeatId(item.meatId),
@@ -109,54 +174,25 @@ const loadInventory = (): InventoryItem[] => {
   } catch (e) {
     console.error('Failed to load inventory', e);
   }
-  return defaultInventory;
+  return [];
 };
 
 export const MOCK_INVENTORY: InventoryItem[] = loadInventory();
 
 export const saveInventory = () => {
   try {
-    localStorage.setItem('meowmeal_inventory', JSON.stringify(MOCK_INVENTORY));
+    localStorage.setItem(STORAGE_KEYS.INVENTORY, JSON.stringify(MOCK_INVENTORY));
   } catch (e) {
     console.error('Failed to save inventory', e);
   }
 };
 
-// 默认食谱严格遵循 role 分配比例（白肉35%、红肉25%、心脏15%、鱼类10%、青口贝5%、肝脏5%、其他内脏5%）
-const defaultRecipeIngredients = [
-  { meatId: 'ing_086', weight: 350 }, // 鸡胸肉 (white_meat 35%)
-  { meatId: 'ing_001', weight: 250 }, // 猪里脊 (red_meat 25%)
-  { meatId: 'ing_089', weight: 150 }, // 鸡心 (heart 15%)
-  { meatId: 'ing_126', weight: 100 }, // 三文鱼 (fish 10%)
-  { meatId: 'ing_131', weight: 50 },  // 青口贝生 (mussel 5%)
-  { meatId: 'ing_090', weight: 50 },  // 鸡肝 (liver 5%)
-  { meatId: 'ing_006', weight: 50 },  // 猪腰/猪肾 (other_organ 5%)
-];
-
-const defaultRecipes: Recipe[] = [
-  {
-    id: 'r1',
-    name: '汤圆的日常鸡猪均衡餐',
-    catIds: ['c1'],
-    standard: 'NRC',
-    lifeStage: 'adult',
-    days: 7,
-    mode: 'by_need',
-    ingredients: defaultRecipeIngredients,
-    supplements: recommendSupplements(defaultRecipeIngredients, 'NRC', 'adult'),
-    createdAt: '2026-11-20',
-    isActive: true,
-    executedDays: 2,
-    startDate: '2026-11-20T08:00:00.000Z',
-  },
-];
-
 const loadRecipes = (): Recipe[] => {
   try {
-    const saved = localStorage.getItem('meowmeal_recipes');
+    const saved = localStorage.getItem(STORAGE_KEYS.RECIPES);
     if (saved) {
       const parsed = JSON.parse(saved) as Recipe[];
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed.map((r) => ({
           ...r,
           standard: r.standard === 'AAFCO' ? 'AAFCO' : 'NRC',
@@ -175,14 +211,14 @@ const loadRecipes = (): Recipe[] => {
   } catch (e) {
     console.error('Failed to load recipes', e);
   }
-  return defaultRecipes;
+  return [];
 };
 
 export const MOCK_RECIPES: Recipe[] = loadRecipes();
 
 export const saveRecipes = () => {
   try {
-    localStorage.setItem('meowmeal_recipes', JSON.stringify(MOCK_RECIPES));
+    localStorage.setItem(STORAGE_KEYS.RECIPES, JSON.stringify(MOCK_RECIPES));
   } catch (e) {
     console.error('Failed to save recipes', e);
   }

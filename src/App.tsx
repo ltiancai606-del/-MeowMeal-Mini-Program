@@ -78,7 +78,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 w-full overflow-y-auto overflow-x-hidden pb-6 relative">
+        <main className="flex-1 w-full overflow-y-auto overflow-x-hidden relative">
           {children}
         </main>
 

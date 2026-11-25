@@ -2,12 +2,15 @@ const storage = require('../../utils/storage');
 
 Page({
   data: {
-    user: { nickname: '铲屎官小王', daysUsed: 48 },
+    user: { nickname: '铲屎官', daysUsed: 1 },
     cats: [],
     selectedCatId: '',
     activeCat: null,
     recipeCount: 0,
-    inventoryCount: 0,
+    totalMadeKg: '0.0',
+    totalSpent: 0,
+    showUserModal: false,
+    formNickname: '',
     showCatModal: false,
     editingCatId: '',
     formName: '',
@@ -42,14 +45,51 @@ Page({
         })
       : null;
 
+    const totalGrams = recipes.reduce(
+      (sum, r) => sum + (r.ingredients || []).reduce((s, ing) => s + (Number(ing.weight) || 0), 0),
+      0
+    );
+    const totalSpent = Math.round(
+      inventory.reduce((sum, item) => sum + (Number(item.price) || 0), 0)
+    );
+
     this.setData({
       user,
       cats,
       selectedCatId,
       activeCat,
       recipeCount: recipes.length,
-      inventoryCount: inventory.length,
+      totalMadeKg: (totalGrams / 1000).toFixed(1),
+      totalSpent,
     });
+  },
+
+  onOpenEditUser() {
+    this.setData({
+      showUserModal: true,
+      formNickname: this.data.user.nickname || '',
+    });
+  },
+
+  onCloseUserModal() {
+    this.setData({ showUserModal: false });
+  },
+
+  onNicknameInput(e) {
+    this.setData({ formNickname: e.detail.value });
+  },
+
+  onSaveUser() {
+    const nickname = (this.data.formNickname || '').trim();
+    if (!nickname) {
+      wx.showToast({ title: '请输入昵称', icon: 'none' });
+      return;
+    }
+    const nextUser = Object.assign({}, this.data.user, { nickname });
+    storage.saveUser(nextUser);
+    this.setData({ showUserModal: false });
+    this.loadData();
+    wx.showToast({ title: '昵称已更新', icon: 'success' });
   },
 
   onSelectCat(e) {
@@ -143,19 +183,34 @@ Page({
     wx.showToast({ title: '已保存猫咪档案', icon: 'success' });
   },
 
-  onDeleteCat() {
+  confirmDeleteCatById(catId, catName) {
     wx.showModal({
-      title: '删除档案',
-      content: `确认删除猫咪「${this.data.formName}」的档案吗？`,
-      confirmColor: '#EF4444',
+      title: '删除猫咪档案',
+      content: `确认删除「${catName}」的档案吗？`,
+      confirmColor: '#E11D48',
       success: (res) => {
         if (!res.confirm) return;
-        const next = storage.getCats().filter((c) => c.id !== this.data.editingCatId);
+        const next = storage.getCats().filter((c) => c.id !== catId);
         storage.saveCats(next);
-        this.setData({ showCatModal: false, selectedCatId: next[0] ? next[0].id : '' });
+        this.setData({
+          showCatModal: false,
+          selectedCatId: next[0] ? next[0].id : '',
+        });
         this.loadData();
+        wx.showToast({ title: '已删除档案', icon: 'none' });
       },
     });
+  },
+
+  onDeleteActiveCat() {
+    const cat = this.data.activeCat;
+    if (!cat) return;
+    this.confirmDeleteCatById(cat.id, cat.name);
+  },
+
+  onDeleteCat() {
+    if (!this.data.editingCatId) return;
+    this.confirmDeleteCatById(this.data.editingCatId, this.data.formName || '该猫咪');
   },
 
   onGoIngredients() {
