@@ -1,6 +1,9 @@
 <view class="dash-page">
-  <!-- 橙色顶栏 -->
-  <view class="dash-hero">
+  <!-- 橙色顶栏（一体沉浸顶栏，无原生白线） -->
+  <view class="dash-hero" style="padding-top: {{statusBarHeight}}px;">
+    <view class="custom-title-bar" style="height: {{navBarHeight}}px;">
+      <text class="custom-title-text">喵膳 MeowMeal</text>
+    </view>
     <view class="hero-top">
       <view>
         <text class="hero-hello">早上好 👋</text>

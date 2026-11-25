@@ -7,9 +7,21 @@
 
 .orange-header {
   background-color: #FF7B4A;
-  padding: 32rpx 34rpx 36rpx;
+  padding: 0 34rpx 32rpx;
   color: #FFFFFF;
   flex-shrink: 0;
+}
+
+.custom-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-title-text {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #FFFFFF;
 }
 
 .user-row {
@@ -17,6 +29,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 20rpx;
+  padding-top: 16rpx;
 }
 
 .user-left {

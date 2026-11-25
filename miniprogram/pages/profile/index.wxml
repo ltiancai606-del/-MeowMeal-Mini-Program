@@ -1,6 +1,9 @@
 <view class="profile-page">
-  <!-- 橙色个人头部 -->
-  <view class="orange-header">
+  <!-- 橙色个人头部（一体沉浸顶栏，无原生白线） -->
+  <view class="orange-header" style="padding-top: {{statusBarHeight}}px;">
+    <view class="custom-title-bar" style="height: {{navBarHeight}}px;">
+      <text class="custom-title-text">我的</text>
+    </view>
     <view class="user-row">
       <view class="user-left">
         <view class="user-avatar">😊</view>

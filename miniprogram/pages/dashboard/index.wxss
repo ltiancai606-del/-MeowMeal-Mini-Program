@@ -7,15 +7,28 @@
 
 .dash-hero {
   background-color: #FF7B4A;
-  padding: 24rpx 34rpx 96rpx;
+  padding: 0 34rpx 92rpx;
   color: #FFFFFF;
   flex-shrink: 0;
+}
+
+.custom-title-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-title-text {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #FFFFFF;
 }
 
 .hero-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-top: 12rpx;
 }
 
 .hero-hello {

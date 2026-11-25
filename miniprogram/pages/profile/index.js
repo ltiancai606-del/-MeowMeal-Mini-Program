@@ -2,6 +2,8 @@ const storage = require('../../utils/storage');
 
 Page({
   data: {
+    statusBarHeight: 20,
+    navBarHeight: 44,
     user: { nickname: '铲屎官', daysUsed: 1 },
     cats: [],
     selectedCatId: '',
@@ -22,8 +24,30 @@ Page({
     formDietNeeds: '',
   },
 
+  onLoad() {
+    this.initNavBarMetrics();
+  },
+
   onShow() {
     this.loadData();
+  },
+
+  initNavBarMetrics() {
+    let statusBarHeight = 20;
+    let navBarHeight = 44;
+    try {
+      const winInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      if (winInfo && winInfo.statusBarHeight) {
+        statusBarHeight = winInfo.statusBarHeight;
+      }
+      if (wx.getMenuButtonBoundingClientRect) {
+        const menu = wx.getMenuButtonBoundingClientRect();
+        if (menu && menu.height && menu.top >= statusBarHeight) {
+          navBarHeight = (menu.top - statusBarHeight) * 2 + menu.height;
+        }
+      }
+    } catch (e) {}
+    this.setData({ statusBarHeight, navBarHeight });
   },
 
   loadData() {
